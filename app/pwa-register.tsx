@@ -18,6 +18,12 @@ function isAppleMobile() {
   return /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
 
+function isAndroidMobile() {
+  return /Android/i.test(navigator.userAgent)
+}
+
+const DISMISS_KEY = 'rembayung-install-prompt-dismissed-v2'
+
 export function PwaRegister() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null)
   const [showIosHelp, setShowIosHelp] = useState(false)
@@ -31,10 +37,15 @@ export function PwaRegister() {
     }
 
     if (isStandalone()) return
-    if (sessionStorage.getItem('rembayung-install-prompt-dismissed') === '1') return
+    if (sessionStorage.getItem(DISMISS_KEY) === '1') return
 
     if (isAppleMobile()) {
       setShowIosHelp(true)
+      setVisible(true)
+    } else if (isAndroidMobile()) {
+      // Show the in-app install surface immediately on Android. Chromium may emit
+      // beforeinstallprompt later (or not at all if it has already consumed/suppressed it).
+      setShowIosHelp(false)
       setVisible(true)
     }
 
@@ -48,7 +59,7 @@ export function PwaRegister() {
     const handleInstalled = () => {
       setVisible(false)
       setInstallPrompt(null)
-      sessionStorage.removeItem('rembayung-install-prompt-dismissed')
+      sessionStorage.removeItem(DISMISS_KEY)
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
@@ -71,7 +82,7 @@ export function PwaRegister() {
   }
 
   function dismiss() {
-    sessionStorage.setItem('rembayung-install-prompt-dismissed', '1')
+    sessionStorage.setItem(DISMISS_KEY, '1')
     setVisible(false)
   }
 
@@ -90,9 +101,13 @@ export function PwaRegister() {
             <p className="installPromptCopy">
               Di iPhone: tekan <strong>Share</strong>, kemudian pilih <strong>Add to Home Screen</strong>.
             </p>
-          ) : (
+          ) : installPrompt ? (
             <p className="installPromptCopy">
               Pasang app untuk buka lebih cepat dalam paparan standalone, tanpa perlu cari laman ini semula.
+            </p>
+          ) : (
+            <p className="installPromptCopy">
+              Untuk pasang di Android, buka menu Chrome <strong>⋮</strong> dan pilih <strong>Install app</strong>. Jika butang automatik tersedia, ia akan muncul di bawah.
             </p>
           )}
         </div>
