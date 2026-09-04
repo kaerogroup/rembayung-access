@@ -9,10 +9,14 @@ body {
   background: #f6f3ed;
   color: #171717;
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 button,
@@ -28,7 +32,8 @@ a {
 .shell {
   width: min(760px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 48px 0 80px;
+  padding-top: max(48px, calc(24px + env(safe-area-inset-top)));
+  padding-bottom: max(80px, calc(32px + env(safe-area-inset-bottom)));
 }
 
 .hero {
@@ -84,6 +89,7 @@ h1 {
 input,
 select {
   width: 100%;
+  min-height: 48px;
   border: 1px solid #cfc8bc;
   border-radius: 12px;
   padding: 12px 14px;
@@ -91,12 +97,14 @@ select {
 }
 
 button {
+  min-height: 48px;
   border: 0;
   border-radius: 999px;
-  padding: 11px 16px;
+  padding: 11px 18px;
   background: #171717;
   color: white;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button.secondary {
@@ -121,6 +129,13 @@ button:disabled {
   font-size: 14px;
 }
 
+.status.offline {
+  position: sticky;
+  top: max(8px, env(safe-area-inset-top));
+  z-index: 10;
+  margin-bottom: 16px;
+}
+
 .sessionGrid {
   display: grid;
   gap: 14px;
@@ -142,11 +157,15 @@ button:disabled {
 @media (max-width: 560px) {
   .shell {
     width: min(100% - 24px, 760px);
-    padding-top: 28px;
+    padding-top: max(28px, calc(16px + env(safe-area-inset-top)));
   }
 
   .card {
     padding: 16px;
     border-radius: 16px;
+  }
+
+  .row > button {
+    flex: 1 1 150px;
   }
 }

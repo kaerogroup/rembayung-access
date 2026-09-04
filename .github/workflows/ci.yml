@@ -27,10 +27,17 @@ jobs:
           test -f docs/ARCHITECTURE.md
           test -f supabase/migrations/20260904000100_interest_access_foundation.sql
           test -f supabase/migrations/20260904000200_slice_a_interest_commands.sql
+          test -f supabase/migrations/20260904000300_slice_a_read_grants.sql
           test -f workers/broadcast/src/index.ts
           test -f workers/broadcast/wrangler.jsonc
           test -f package.json
           test -f app/page.tsx
+          test -f app/pwa-register.tsx
+          test -f public/manifest.webmanifest
+          test -f public/sw.js
+          test -f public/offline.html
+          test -f public/icon.svg
+          test -f public/maskable-icon.svg
 
       - name: Verify MVP authority boundaries
         shell: bash
@@ -53,6 +60,17 @@ jobs:
           grep -q "token_hash text not null unique" supabase/migrations/20260904000100_interest_access_foundation.sql
           grep -q "party_size_out_of_range" supabase/migrations/20260904000200_slice_a_interest_commands.sql
           grep -q "interest_window_closed" supabase/migrations/20260904000200_slice_a_interest_commands.sql
+
+      - name: Verify PWA invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"display": "standalone"' public/manifest.webmanifest
+          grep -q '"start_url": "/"' public/manifest.webmanifest
+          grep -q '"purpose": "maskable"' public/manifest.webmanifest
+          grep -q "navigator.serviceWorker.register('/sw.js'" app/pwa-register.tsx
+          grep -q "url.origin !== self.location.origin" public/sw.js
+          grep -q "Offline — anda boleh melihat app shell" app/page.tsx
 
       - name: No accidental secrets
         shell: bash
@@ -85,3 +103,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Verify static PWA output
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f out/index.html
+          test -f out/manifest.webmanifest
+          test -f out/sw.js
+          test -f out/offline.html
+          test -f out/icon.svg
+          test -f out/maskable-icon.svg
