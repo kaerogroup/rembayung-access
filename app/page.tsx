@@ -38,6 +38,7 @@ export default function HomePage() {
   const [partySizes, setPartySizes] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
 
   const interestBySession = useMemo(
     () => new Map(interests.map((interest) => [interest.session_id, interest])),
@@ -87,8 +88,26 @@ export default function HomePage() {
     void refresh()
   }, [refresh])
 
+  useEffect(() => {
+    const syncNetworkState = () => {
+      const online = navigator.onLine
+      setIsOnline(online)
+      if (online) void refresh()
+    }
+
+    syncNetworkState()
+    window.addEventListener('online', syncNetworkState)
+    window.addEventListener('offline', syncNetworkState)
+
+    return () => {
+      window.removeEventListener('online', syncNetworkState)
+      window.removeEventListener('offline', syncNetworkState)
+    }
+  }, [refresh])
+
   async function signIn(event: FormEvent) {
     event.preventDefault()
+    if (!isOnline) return
     setBusy(true)
     setMessage(null)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -97,6 +116,7 @@ export default function HomePage() {
   }
 
   async function signUp() {
+    if (!isOnline) return
     setBusy(true)
     setMessage(null)
     const { error } = await supabase.auth.signUp({ email, password })
@@ -105,6 +125,7 @@ export default function HomePage() {
   }
 
   async function signOut() {
+    if (!isOnline) return
     setBusy(true)
     await supabase.auth.signOut()
     setBusy(false)
@@ -112,6 +133,7 @@ export default function HomePage() {
   }
 
   async function joinInterest(sessionId: string) {
+    if (!isOnline) return
     setBusy(true)
     setMessage(null)
     const partySize = partySizes[sessionId] ?? 2
@@ -125,6 +147,7 @@ export default function HomePage() {
   }
 
   async function cancelInterest(interestId: string) {
+    if (!isOnline) return
     setBusy(true)
     setMessage(null)
     const { error } = await supabase.rpc('cancel_interest', { p_interest_id: interestId })
@@ -143,6 +166,12 @@ export default function HomePage() {
           wave. Jemputan bukan tempahan; UMAI kekal sebagai saluran tempahan sebenar.
         </p>
       </section>
+
+      {!isOnline && (
+        <div className="status offline" role="status">
+          Offline — anda boleh melihat app shell, tetapi status dan tindakan booking memerlukan sambungan.
+        </div>
+      )}
 
       {message && <div className="status">{message}</div>}
 
@@ -168,8 +197,8 @@ export default function HomePage() {
               required
             />
             <div className="row">
-              <button disabled={busy} type="submit">Log masuk</button>
-              <button disabled={busy} className="secondary" type="button" onClick={signUp}>
+              <button disabled={busy || !isOnline} type="submit">Log masuk</button>
+              <button disabled={busy || !isOnline} className="secondary" type="button" onClick={signUp}>
                 Daftar akaun
               </button>
             </div>
@@ -183,7 +212,7 @@ export default function HomePage() {
                 <strong>{user.email}</strong>
                 <div className="muted">Satu akaun untuk semua sesi Rembayung Access.</div>
               </div>
-              <button disabled={busy} className="secondary" onClick={signOut}>Log keluar</button>
+              <button disabled={busy || !isOnline} className="secondary" onClick={signOut}>Log keluar</button>
             </div>
           </section>
 
@@ -216,7 +245,7 @@ export default function HomePage() {
                     ) : active ? (
                       <div className="row">
                         <span className="status">Dalam interest pool · {interest.party_size} orang</span>
-                        <button disabled={busy} className="secondary" onClick={() => cancelInterest(interest.id)}>
+                        <button disabled={busy || !isOnline} className="secondary" onClick={() => cancelInterest(interest.id)}>
                           Batalkan minat
                         </button>
                       </div>
@@ -235,8 +264,8 @@ export default function HomePage() {
                             ))}
                           </select>
                         </label>
-                        <button disabled={busy || !isOpen} onClick={() => joinInterest(session.id)}>
-                          {isOpen ? 'Daftar minat' : now < opensAt ? 'Belum dibuka' : 'Interest pool ditutup'}
+                        <button disabled={busy || !isOnline || !isOpen} onClick={() => joinInterest(session.id)}>
+                          {!isOnline ? 'Perlu online' : isOpen ? 'Daftar minat' : now < opensAt ? 'Belum dibuka' : 'Interest pool ditutup'}
                         </button>
                       </div>
                     )}
