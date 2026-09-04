@@ -2,6 +2,9 @@
   "name": "rembayung-access-broadcast",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-04",
+  "vars": {
+    "SUPABASE_URL": "https://irqqpevmjaqggtmktbxf.supabase.co"
+  },
   "triggers": {
     "crons": ["* * * * *"]
   }

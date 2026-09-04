@@ -1,8 +1,6 @@
 interface Env {
   SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
-  RESEND_API_KEY: string;
-  APP_URL: string;
+  SUPABASE_SECRET_KEY: string;
 }
 
 type DueInvitation = {
@@ -18,8 +16,8 @@ async function callRpc<T>(env: Env, name: string) {
   const response = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: env.SUPABASE_SECRET_KEY,
+      authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
       'content-type': 'application/json',
     },
     body: '{}',
@@ -37,12 +35,14 @@ async function processWave(env: Env) {
 
   const invitations = await callRpc<DueInvitation[]>(env, 'process_due_wave');
 
-  // Skeleton only. Slice C will resolve the verified recipient email
-  // server-side and send the invitation through Resend.
+  // Never log invitation plaintext tokens. Slice C will consume the token
+  // in-process to construct the authenticated invitation URL for delivery.
   for (const invitation of invitations) {
-    console.log('Invitation ready', {
+    console.log('Invitation issued', {
       invitationId: invitation.invitation_id,
-      url: `${env.APP_URL}/invite/${invitation.token_plain}`,
+      sessionId: invitation.session_id,
+      waveId: invitation.wave_id,
+      expiresAt: invitation.expires_at,
     });
   }
 }
