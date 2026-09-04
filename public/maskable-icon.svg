@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Rembayung Access">
+  <rect width="512" height="512" fill="#171717"/>
+  <circle cx="256" cy="256" r="128" fill="#f6f3ed"/>
+  <path d="M190 322V190h82c53 0 88 27 88 68 0 26-15 46-39 58l47 11v45h-57l-52-49h-15v49h-54Zm54-93h26c22 0 35-9 35-24s-13-23-35-23h-26v47Z" fill="#171717"/>
+</svg>
