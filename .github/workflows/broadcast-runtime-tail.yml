@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           output="$(mktemp)"
           set +e
-          timeout 80s wrangler tail "$WORKER_NAME" --format=json --sampling-rate=1 >"$output" 2>&1
+          timeout 80s wrangler tail "$WORKER_NAME" --format=json --sampling-rate=0.99 >"$output" 2>&1
           exit_code=$?
           set -e
 
