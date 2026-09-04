@@ -6,7 +6,7 @@ Last updated: 2026-09-05
 
 Rembayung Access is a production-connected MVP for fair access before UMAI.
 
-Slice A is implemented. Slice B scheduled random draw is implemented and deployed; production runtime acceptance is the active checkpoint.
+Slice A is implemented. Slice B scheduled random draw is COMPLETE — production runtime accepted. Slice C Resend invitation delivery is the active product slice.
 
 ## Completed / operational
 
@@ -18,35 +18,50 @@ Slice A is implemented. Slice B scheduled random draw is implemented and deploye
 - PostgreSQL authority for sessions, interests, draw waves, invitations, email delivery outbox and redirect audits.
 - Idempotent draw-wave materialization via `ensure_draw_waves()`.
 - Server-only random-first selection via `process_due_wave()`.
-- Cloudflare broadcast Worker deployed with Cron trigger.
+- Cloudflare broadcast Worker deployed with every-minute Cron trigger.
 - GitHub Actions CI on pull requests and `main`.
 - Supabase migration dry-run gate on PRs and governed migration apply on `main`.
 - Governed Cloudflare broadcast Worker deployment from `main` when worker/deployment files change.
 - Read-only Slice B production runtime checkpoint through GitHub Actions.
+- Cloudflare Cron production diagnostic and Worker runtime tail diagnostic for focused operational debugging.
 
-## Active runtime checkpoint — Slice B
+## Slice B — COMPLETE / production runtime accepted
 
-Fixed test session:
+Fixed acceptance session:
 
 `4e690585-4986-48d9-a6cb-1a0d168fd06f` — `[TEST] Slice B — Random Draw Runtime`
 
-Acceptance proof required:
+Verified production evidence:
 
-1. authenticated user joins the interest pool;
-2. scheduled Cloudflare Cron processes the due wave without admin action;
-3. exactly one eligible interest is selected for `wave_size = 1`;
-4. one invitation is created;
-5. wave completes with `selected_count = 1`;
-6. retry/repeated scheduler execution does not duplicate entitlement.
+1. authenticated user joined one interest with party size 2;
+2. Cloudflare Cron invocation was captured in production without admin-triggered draw execution;
+3. Wave 1 transitioned to `completed` at 2026-09-05 07:51:45 MYT with `selected_count = 1`;
+4. the sole eligible interest transitioned `active -> selected` exactly once;
+5. exactly one invitation was created;
+6. Wave 2 transitioned to `completed` at 2026-09-05 07:52:45 MYT with `selected_count = 0`;
+7. invitation total remained exactly one after Wave 2, proving no duplicate entitlement for the accepted scenario;
+8. both completed waves recorded no error.
 
-The latest production checkpoint before participant join showed the session published, both waves scheduled, zero errors, zero interests and zero invitations.
+During runtime acceptance, focused diagnostics identified two integration defects and corrected them through governed changes:
 
-## Next product slices
+- the Cloudflare Worker no longer sends the Supabase opaque secret key as a Bearer JWT; it uses the server-only API-key header boundary;
+- `process_due_wave()` schema-qualifies Supabase `pgcrypto` routines under `extensions` via migration `20260905000200_fix_slice_b_pgcrypto_schema.sql`, while retaining the restricted function search path.
 
-### Slice C — Resend
+No manual draw RPC was used for final acceptance; the successful transitions were produced by the production Cloudflare Cron path.
+
+## Active product slice — Slice C Resend
+
+Target:
+
 - consume pending invitation delivery rows;
-- send transactional invitation email;
-- record delivery result and retry safely.
+- send transactional invitation email through Resend from server/Worker runtime only;
+- email returns the selected user to a Rembayung Access invitation URL, never directly to UMAI;
+- record delivery provider result, provider message ID, attempt count, sent timestamp and bounded failure state;
+- retry safely and idempotently;
+- preserve Supabase as transactional authority;
+- remain extensible for Supabase Realtime in-app updates and future Web Push notifications, with email as a reliable delivery channel.
+
+## Subsequent slices
 
 ### Slice D — Invitation gate
 - invitation page inside Rembayung Access;
