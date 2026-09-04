@@ -1,6 +1,7 @@
 -- Slice B runtime acceptance session.
 -- Purpose: verify scheduled wave materialization + random selection end-to-end.
 -- UMAI destination remains intentionally non-routable during acceptance.
+-- Runtime window deliberately leaves enough time for governed deploy + user join.
 
 insert into public.booking_sessions (
   id,
@@ -21,14 +22,14 @@ values (
   '[TEST] Slice B — Random Draw Runtime',
   '2026-09-05 19:00:00+08'::timestamptz,
   '2026-09-04 00:00:00+08'::timestamptz,
-  '2026-09-04 22:55:00+08'::timestamptz,
-  '2026-09-04 23:00:00+08'::timestamptz,
+  '2026-09-04 23:40:00+08'::timestamptz,
+  '2026-09-04 23:45:00+08'::timestamptz,
   1,
   5,
   2,
   15,
   'https://example.invalid/umai-slice-b-runtime-test',
-  'published'::public.booking_session_status
+  'published'::public.session_status
 )
 on conflict (id) do update set
   title = excluded.title,
