@@ -1,0 +1,66 @@
+name: Broadcast Worker Runtime Tail
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/broadcast-runtime-tail.yml'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+  WORKER_NAME: rembayung-access-broadcast
+
+jobs:
+  tail:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate Cloudflare configuration
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Wrangler
+        shell: bash
+        run: npm install --global wrangler@4
+
+      - name: Tail next scheduled invocation
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          output="$(mktemp)"
+          set +e
+          timeout 80s wrangler tail "$WORKER_NAME" --format=json --sampling-rate=1 >"$output" 2>&1
+          exit_code=$?
+          set -e
+
+          cat "$output"
+
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 124 ]; then
+            echo "Wrangler tail failed with exit code $exit_code"
+            exit "$exit_code"
+          fi
+
+          if ! grep -Eq 'scheduled|ensure_draw_waves|process_due_wave|exception|outcome|Invocation' "$output"; then
+            echo 'No scheduled invocation evidence captured during the tail window.'
+            exit 1
+          fi
