@@ -8,13 +8,14 @@ type InstallPromptEvent = Event & {
 }
 
 function isStandalone() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
   return window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
 }
 
 function isAppleMobile() {
   const ua = navigator.userAgent
-  return /iPhone|iPad|iPod/i.test(ua)
+  return /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
 
 export function PwaRegister() {
