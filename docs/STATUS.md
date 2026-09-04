@@ -3,8 +3,18 @@
 Last updated: 2026-09-05
 
 Slice A is implemented and production-connected.
-Slice B scheduled random draw is implemented, deployed and in production runtime acceptance.
+Slice B scheduled random draw is COMPLETE — production runtime accepted.
 
-Current checkpoint: authenticated participant joins the fixed Slice B test session, then Cloudflare Cron must process the scheduled wave, mark exactly one eligible interest selected, create one invitation, and complete the wave idempotently.
+Production acceptance evidence:
+- authenticated interest persisted successfully;
+- Cloudflare Cron fired without admin action;
+- Wave 1 completed with `selected_count = 1`;
+- the active interest became `selected` exactly once;
+- exactly one invitation was created;
+- Wave 2 completed with `selected_count = 0`;
+- invitation count remained exactly one, confirming no duplicate entitlement;
+- both completed waves recorded no error.
 
-Next product slice after Slice B acceptance: Slice C — Resend invitation delivery.
+Runtime defect discovered during acceptance was fixed through governed migration: `process_due_wave()` now schema-qualifies Supabase `pgcrypto` routines under `extensions` while retaining the restricted function search path.
+
+Active product slice: Slice C — Resend invitation delivery.

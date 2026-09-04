@@ -1,26 +1,34 @@
 # NEXT ACTIONS
 
-## Active checkpoint — Slice B runtime acceptance
+## Active slice — Slice C Resend invitation delivery
 
-1. Join the fixed production Slice B test session as an authenticated user before the interest window closes.
-2. Confirm the production checkpoint reports one active interest.
-3. Allow the Cloudflare Cron scheduler to reach the due wave.
-4. Verify the wave transitions `scheduled -> processing -> completed`.
-5. Verify exactly one eligible interest becomes `selected` for `wave_size = 1`.
-6. Verify exactly one invitation is created and the wave records `selected_count = 1`.
-7. Re-run the runtime checkpoint to confirm idempotent state and no duplicate entitlement.
-8. Record Slice B runtime acceptance in project state.
+1. Consume pending `email_deliveries` created by successful draw selection.
+2. Send the transactional invitation email through Resend from server/Worker runtime only.
+3. Construct the invitation URL back into Rembayung Access; never email the UMAI URL directly.
+4. Record delivery provider result, provider message ID, attempt count, sent timestamp and bounded failure information.
+5. Make delivery retry-safe and idempotent so scheduler/network retries do not duplicate entitlement or uncontrolled email sends.
+6. Verify production delivery against the existing invitation/outbox authority.
+7. Keep the notification architecture extensible for Supabase Realtime in-app updates and future Web Push; notification channels remain signals, never transactional authority.
 
-## After Slice B acceptance
+## After Slice C
 
-1. Slice C — connect Resend delivery to pending invitation email deliveries.
-2. Slice D — authenticated invitation gate, expiry/ownership validation and audited UMAI redirect.
-3. Prove the end-to-end golden path.
-4. Run larger fairness/idempotency acceptance with 100+ dummy interests.
-5. Slice E — minimum admin surface for session configuration and operational observation.
+1. Slice D — authenticated invitation gate, expiry/ownership validation and audited UMAI redirect.
+2. Prove the complete end-to-end golden path.
+3. Run larger fairness/idempotency acceptance with 100+ dummy interests.
+4. Slice E — minimum admin surface for session configuration and operational observation.
+
+## Completed checkpoint — Slice B
+
+- production Cloudflare Cron verified firing;
+- Wave 1 completed with one selection and one invitation;
+- Wave 2 completed with zero further selections;
+- invitation total remained one;
+- no duplicate entitlement;
+- production pgcrypto schema-resolution defect corrected through migration `20260905000200_fix_slice_b_pgcrypto_schema.sql`.
 
 ## Guardrails
 
 - No UMAI replacement in MVP.
+- Invitation email returns to Rembayung Access, not directly to UMAI.
 - No payment, QR/device binding or advanced anti-fraud yet.
 - No large re-audit before each slice; use focused CI, migration and runtime checkpoints.
