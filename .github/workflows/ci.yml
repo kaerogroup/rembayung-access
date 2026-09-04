@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  foundation-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify canonical files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f docs/SSOT.md
+          test -f docs/CANON.md
+          test -f docs/ERD.md
+          test -f docs/FLOWS.md
+          test -f docs/ARCHITECTURE.md
+          test -f supabase/migrations/20260904000100_interest_access_foundation.sql
+          test -f workers/broadcast/src/index.ts
+          test -f workers/broadcast/wrangler.jsonc
+
+      - name: Verify MVP authority boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "Random first, not fastest first" docs/CANON.md
+          grep -q "No direct UMAI link in email" docs/CANON.md
+          grep -q "UMAI remains the reservation authority" docs/CANON.md
+          grep -q "revoke all on function public.process_due_wave() from public, anon, authenticated" supabase/migrations/20260904000100_interest_access_foundation.sql
+
+      - name: Check migration invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "unique (user_id, session_id)" supabase/migrations/20260904000100_interest_access_foundation.sql
+          grep -q "for update skip locked" supabase/migrations/20260904000100_interest_access_foundation.sql
+          grep -q "order by gen_random_uuid()" supabase/migrations/20260904000100_interest_access_foundation.sql
+          grep -q "token_hash text not null unique" supabase/migrations/20260904000100_interest_access_foundation.sql
+
+      - name: No accidental secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE '(SUPABASE_SERVICE_ROLE_KEY|RESEND_API_KEY|CLOUDFLARE_API_TOKEN)\s*[:=]\s*[A-Za-z0-9_-]{20,}' . --exclude-dir=.git --exclude='*.md'; then
+            echo 'Potential secret committed to repository'
+            exit 1
+          fi
