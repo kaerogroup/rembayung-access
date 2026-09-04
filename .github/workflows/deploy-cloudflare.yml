@@ -10,6 +10,46 @@ env:
   NODE_VERSION: '24'
 
 jobs:
+  deploy-app:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate app runtime configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${NEXT_PUBLIC_SUPABASE_URL:-}" || { echo 'Missing repository variable: SUPABASE_URL'; exit 1; }
+          test -n "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" || { echo 'Missing repository variable: SUPABASE_PUBLISHABLE_KEY'; exit 1; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo 'Missing repository secret: CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo 'Missing repository secret: CLOUDFLARE_ACCOUNT_ID'; exit 1; }
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build static app
+        run: npm run build
+
+      - name: Deploy app to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy out --project-name rembayung-access
+
   deploy-broadcast-worker:
     runs-on: ubuntu-latest
     environment: production
