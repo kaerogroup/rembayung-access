@@ -10,6 +10,13 @@
   "theme_color": "#171717",
   "lang": "ms-MY",
   "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://rembayung-access.pages.dev/manifest.webmanifest"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
