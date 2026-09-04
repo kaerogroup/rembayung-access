@@ -14,8 +14,8 @@ type DueInvitation = {
   expires_at: string;
 };
 
-async function processWave(env: Env) {
-  const rpc = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/process_due_wave`, {
+async function callRpc<T>(env: Env, name: string) {
+  const response = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
       apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -25,8 +25,17 @@ async function processWave(env: Env) {
     body: '{}',
   });
 
-  if (!rpc.ok) throw new Error(`process_due_wave failed: ${rpc.status}`);
-  const invitations = (await rpc.json()) as DueInvitation[];
+  if (!response.ok) throw new Error(`${name} failed: ${response.status}`);
+  return (await response.json()) as T;
+}
+
+async function processWave(env: Env) {
+  const insertedWaves = await callRpc<number>(env, 'ensure_draw_waves');
+  if (insertedWaves > 0) {
+    console.log('Draw waves materialized', { insertedWaves });
+  }
+
+  const invitations = await callRpc<DueInvitation[]>(env, 'process_due_wave');
 
   // Skeleton only. Slice C will resolve the verified recipient email
   // server-side and send the invitation through Resend.
