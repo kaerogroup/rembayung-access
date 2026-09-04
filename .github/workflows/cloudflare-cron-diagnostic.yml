@@ -1,0 +1,58 @@
+name: Cloudflare Cron Runtime Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cloudflare-cron-diagnostic.yml'
+
+permissions:
+  contents: read
+
+env:
+  WORKER_NAME: rembayung-access-broadcast
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate required configuration
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Inspect Worker and Cron triggers
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          echo '=== WORKER SCRIPT ==='
+          curl --fail-with-body --silent --show-error \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/settings" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            | jq '{success, errors, result: {compatibility_date: .result.compatibility_date, bindings: [.result.bindings[]? | {name, type}]}}'
+
+          echo '=== CRON TRIGGERS ==='
+          schedules="$(curl --fail-with-body --silent --show-error \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/schedules" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json')"
+
+          echo "$schedules" | jq '{success, errors, schedules: .result.schedules}'
+          echo "$schedules" | jq -e '.success == true' >/dev/null
+          echo "$schedules" | jq -e '.result.schedules | any(.cron == "* * * * *")' >/dev/null
+
+          echo 'PASS: production Worker has the expected every-minute Cron Trigger attached.'
