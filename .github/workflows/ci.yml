@@ -68,7 +68,11 @@ jobs:
           grep -q '"display": "standalone"' public/manifest.webmanifest
           grep -q '"start_url": "/"' public/manifest.webmanifest
           grep -q '"purpose": "maskable"' public/manifest.webmanifest
+          grep -q '"platform": "webapp"' public/manifest.webmanifest
+          grep -q 'https://rembayung-access.pages.dev/manifest.webmanifest' public/manifest.webmanifest
           grep -q "navigator.serviceWorker.register('/sw.js'" app/pwa-register.tsx
+          grep -q 'getInstalledRelatedApps' app/pwa-register.tsx
+          grep -q 'shortcut-or-pending' app/pwa-register.tsx
           grep -q "url.origin !== self.location.origin" public/sw.js
           grep -q "Offline — anda boleh melihat app shell" app/page.tsx
 
