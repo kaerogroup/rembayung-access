@@ -2,40 +2,60 @@
 
 ## Golden path
 
-`ChatGPT -> feature branch -> pull request -> GitHub Actions -> Cloudflare preview -> runtime acceptance -> merge main -> Cloudflare production -> smoke verification`
+`ChatGPT -> feature branch -> pull request -> GitHub Actions -> focused runtime/preview checkpoint -> squash merge main -> governed production apply/deploy -> production smoke/runtime verification -> project-state update`
 
-## Current bootstrap state
+## Current production delivery state
 
+- GitHub `main` is the production source branch.
 - CI runs on pull requests and pushes to `main`.
 - Supabase migration dry-run is the required schema checkpoint before governed apply.
-- Frontend Slice A is a browser-only Next.js surface and is exported as static assets for Cloudflare Pages.
-- Cloudflare production deployment remains manual until the first runtime deployment and smoke test pass.
-- Broadcast scheduling remains a separate Cloudflare Worker deployment.
-- After first runtime acceptance, production deployment can be enabled on push to `main` and preview deployment on pull requests.
+- Migrations merged to `main` trigger the governed `Supabase Migration Apply` workflow.
+- The Cloudflare broadcast Worker is deployed separately from the static customer PWA.
+- Changes under `workers/broadcast/**` or its deployment workflow trigger governed production Worker deployment from `main`.
+- The broadcast Worker uses a Cloudflare Cron Trigger and server-only Supabase credentials.
+- A read-only Slice B runtime checkpoint workflow can inspect production session, interest, wave and invitation state through the existing governed Supabase connection.
+- Cloudflare Pages hosts the static/mobile-first PWA customer surface; transactional authority remains in Supabase.
 
 ## Required GitHub Actions configuration
 
-Repository variables:
+Repository variables include the public Supabase application configuration and production project reference used by the workflows.
 
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
+Repository secrets include the Cloudflare deployment credentials and privileged Supabase credentials required by governed migration/runtime workflows.
 
-Repository secrets:
+Runtime application secrets, Supabase privileged credentials and future Resend API keys are server/worker only and must never be committed or exposed to the browser bundle.
 
-- `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
+## Delivery boundaries
 
-The app build maps the two public Supabase values to `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` during static export.
+### Customer PWA
 
-Runtime application secrets such as Supabase privileged credentials and Resend keys remain server-side and must never be committed or exposed to the browser bundle.
+- Next.js static/PWA surface delivered through Cloudflare Pages.
+- Browser uses public Supabase configuration only.
+- Authenticated customer writes use RLS/RPC boundaries.
+- Offline/cache state is never authoritative for interests, draws or invitations.
 
-## First production checkpoint
+### Supabase production
 
-Run `Deploy Cloudflare` manually on `main` only after CI passes. The workflow must:
+- Schema and stored procedures are changed only through committed migrations.
+- PR dry-run is the pre-merge schema gate.
+- `main` performs governed migration apply.
 
-1. validate required public runtime variables and Cloudflare credentials;
-2. build the static Next.js app into `out/`;
-3. deploy `out/` to the Cloudflare Pages project `rembayung-access`;
-4. deploy the broadcast Worker separately.
+### Broadcast Worker
 
-After deployment, smoke-test sign-up/sign-in, published sessions, join interest, and cancel interest against the production Supabase project.
+- Deployed independently because scheduler/background runtime has different authority and secrets from the static PWA.
+- Calls `ensure_draw_waves()` and `process_due_wave()` using server-only credentials.
+- Cron execution must remain idempotent and browser-independent.
+
+## Runtime acceptance discipline
+
+A green deployment is necessary but is not sufficient to close a product slice.
+
+For each slice, verify the smallest authoritative runtime outcome. For Slice B this means:
+
+1. authenticated participant joins the production test pool;
+2. due wave is processed by the scheduled Worker without admin action;
+3. random-first selection changes the eligible interest to `selected`;
+4. invitation is created;
+5. wave completes with the expected selected count;
+6. repeated scheduler execution does not duplicate entitlement.
+
+Use GitHub Actions/runtime evidence as checkpoints. Do not repeat a broad repository audit before every slice when source, migration and runtime checkpoints are aligned.
