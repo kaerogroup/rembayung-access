@@ -37,3 +37,15 @@ Device binding, dynamic QR, payments and stronger anti-transfer controls are fut
 
 ### C-12 Replace UMAI only by evidence
 UMAI retirement is a later architecture decision after the access-layer model proves useful in runtime.
+
+### C-13 Mobile first
+Primary customer journeys are designed and acceptance-tested for mobile viewport, touch interaction and one-handed use before desktop enhancement. Desktop is a progressive enhancement, not the baseline.
+
+### C-14 PWA first
+The customer surface must be installable as a Progressive Web App with a valid web app manifest, app icons, standalone display mode and service-worker lifecycle. The architecture must not require an app-store binary for the core journey.
+
+### C-15 Resilient network behaviour
+Poor or interrupted connectivity must fail safely. Static shell/assets may be cached for fast repeat launch, but transactional state such as interest status, draw outcome and invitation validity must always reconcile with Supabase authority before being presented as current.
+
+### C-16 PWA is not offline authority
+Offline capability must never fabricate or locally finalize booking, invitation, draw or reservation state. Writes are acknowledged only after server confirmation. Any queued/retry behaviour must be explicit and idempotent.
