@@ -1,0 +1,92 @@
+name: Slice B Runtime Checkpoint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/slice-b-runtime-checkpoint.yml'
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+  SLICE_B_SESSION_ID: '4e690585-4986-48d9-a6cb-1a0d168fd06f'
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_PROJECT_REF"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Inspect Slice B production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db query --linked "
+          select
+            id,
+            title,
+            status,
+            interest_opens_at,
+            interest_closes_at,
+            draw_starts_at,
+            wave_size,
+            wave_interval_minutes,
+            max_waves,
+            now() as db_now
+          from public.booking_sessions
+          where id = '$SLICE_B_SESSION_ID'::uuid;
+
+          select
+            count(*) as total_interests,
+            count(*) filter (where status = 'active') as active_interests,
+            count(*) filter (where status = 'selected') as selected_interests,
+            min(joined_at) as first_joined_at,
+            max(selected_at) as last_selected_at
+          from public.interests
+          where session_id = '$SLICE_B_SESSION_ID'::uuid;
+
+          select
+            wave_no,
+            scheduled_at,
+            processed_at,
+            status,
+            selected_count,
+            error_message
+          from public.draw_waves
+          where session_id = '$SLICE_B_SESSION_ID'::uuid
+          order by wave_no;
+
+          select
+            count(*) as invitation_count,
+            min(issued_at) as first_issued_at,
+            max(issued_at) as last_issued_at
+          from public.invitations
+          where session_id = '$SLICE_B_SESSION_ID'::uuid;
+          "
