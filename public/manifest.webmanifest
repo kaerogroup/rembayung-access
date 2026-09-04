@@ -1,0 +1,26 @@
+{
+  "name": "Rembayung Access",
+  "short_name": "Rembayung",
+  "description": "Fair-access booking invitation layer for Rembayung.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f3ed",
+  "theme_color": "#171717",
+  "lang": "ms-MY",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
