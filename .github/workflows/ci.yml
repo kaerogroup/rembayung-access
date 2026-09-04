@@ -26,8 +26,11 @@ jobs:
           test -f docs/FLOWS.md
           test -f docs/ARCHITECTURE.md
           test -f supabase/migrations/20260904000100_interest_access_foundation.sql
+          test -f supabase/migrations/20260904000200_slice_a_interest_commands.sql
           test -f workers/broadcast/src/index.ts
           test -f workers/broadcast/wrangler.jsonc
+          test -f package.json
+          test -f app/page.tsx
 
       - name: Verify MVP authority boundaries
         shell: bash
@@ -37,6 +40,8 @@ jobs:
           grep -q "No direct UMAI link in email" docs/CANON.md
           grep -q "UMAI remains the reservation authority" docs/CANON.md
           grep -q "revoke all on function public.process_due_wave() from public, anon, authenticated" supabase/migrations/20260904000100_interest_access_foundation.sql
+          grep -q "grant execute on function public.join_interest" supabase/migrations/20260904000200_slice_a_interest_commands.sql
+          grep -q "grant execute on function public.cancel_interest" supabase/migrations/20260904000200_slice_a_interest_commands.sql
 
       - name: Check migration invariants
         shell: bash
@@ -46,6 +51,8 @@ jobs:
           grep -q "for update skip locked" supabase/migrations/20260904000100_interest_access_foundation.sql
           grep -q "order by gen_random_uuid()" supabase/migrations/20260904000100_interest_access_foundation.sql
           grep -q "token_hash text not null unique" supabase/migrations/20260904000100_interest_access_foundation.sql
+          grep -q "party_size_out_of_range" supabase/migrations/20260904000200_slice_a_interest_commands.sql
+          grep -q "interest_window_closed" supabase/migrations/20260904000200_slice_a_interest_commands.sql
 
       - name: No accidental secrets
         shell: bash
@@ -55,3 +62,26 @@ jobs:
             echo 'Potential secret committed to repository'
             exit 1
           fi
+
+  app-check:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
