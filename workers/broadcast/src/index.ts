@@ -17,14 +17,18 @@ async function callRpc<T>(env: Env, name: string) {
     method: 'POST',
     headers: {
       apikey: env.SUPABASE_SECRET_KEY,
-      authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
       'content-type': 'application/json',
     },
     body: '{}',
   });
 
-  if (!response.ok) throw new Error(`${name} failed: ${response.status}`);
-  return (await response.json()) as T;
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`${name} failed: ${response.status} ${responseText.slice(0, 500)}`);
+  }
+
+  return JSON.parse(responseText) as T;
 }
 
 async function processWave(env: Env) {
