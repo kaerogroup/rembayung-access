@@ -49,44 +49,66 @@ jobs:
         run: |
           set -euo pipefail
           supabase db query --linked "
-          select
-            id,
-            title,
-            status,
-            interest_opens_at,
-            interest_closes_at,
-            draw_starts_at,
-            wave_size,
-            wave_interval_minutes,
-            max_waves,
-            now() as db_now
-          from public.booking_sessions
-          where id = '$SLICE_B_SESSION_ID'::uuid;
-
-          select
-            count(*) as total_interests,
-            count(*) filter (where status = 'active') as active_interests,
-            count(*) filter (where status = 'selected') as selected_interests,
-            min(joined_at) as first_joined_at,
-            max(selected_at) as last_selected_at
-          from public.interests
-          where session_id = '$SLICE_B_SESSION_ID'::uuid;
-
-          select
-            wave_no,
-            scheduled_at,
-            processed_at,
-            status,
-            selected_count,
-            error_message
-          from public.draw_waves
-          where session_id = '$SLICE_B_SESSION_ID'::uuid
-          order by wave_no;
-
-          select
-            count(*) as invitation_count,
-            min(issued_at) as first_issued_at,
-            max(issued_at) as last_issued_at
-          from public.invitations
-          where session_id = '$SLICE_B_SESSION_ID'::uuid;
+          select jsonb_pretty(
+            jsonb_build_object(
+              'session', (
+                select to_jsonb(s)
+                from (
+                  select
+                    id,
+                    title,
+                    status,
+                    interest_opens_at,
+                    interest_closes_at,
+                    draw_starts_at,
+                    wave_size,
+                    wave_interval_minutes,
+                    max_waves,
+                    now() as db_now
+                  from public.booking_sessions
+                  where id = '$SLICE_B_SESSION_ID'::uuid
+                ) s
+              ),
+              'interests', (
+                select to_jsonb(i)
+                from (
+                  select
+                    count(*) as total,
+                    count(*) filter (where status = 'active') as active,
+                    count(*) filter (where status = 'selected') as selected,
+                    count(*) filter (where status = 'cancelled') as cancelled,
+                    count(*) filter (where status = 'closed') as closed,
+                    min(joined_at) as first_joined_at,
+                    max(selected_at) as last_selected_at
+                  from public.interests
+                  where session_id = '$SLICE_B_SESSION_ID'::uuid
+                ) i
+              ),
+              'waves', coalesce((
+                select jsonb_agg(
+                  jsonb_build_object(
+                    'wave_no', wave_no,
+                    'scheduled_at', scheduled_at,
+                    'processed_at', processed_at,
+                    'status', status,
+                    'selected_count', selected_count,
+                    'error_message', error_message
+                  ) order by wave_no
+                )
+                from public.draw_waves
+                where session_id = '$SLICE_B_SESSION_ID'::uuid
+              ), '[]'::jsonb),
+              'invitations', (
+                select to_jsonb(inv)
+                from (
+                  select
+                    count(*) as total,
+                    min(issued_at) as first_issued_at,
+                    max(issued_at) as last_issued_at
+                  from public.invitations
+                  where session_id = '$SLICE_B_SESSION_ID'::uuid
+                ) inv
+              )
+            )
+          ) as runtime_state;
           "
