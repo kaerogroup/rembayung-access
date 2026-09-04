@@ -1,6 +1,7 @@
 -- Slice B: deterministic wave schedule materialization.
 -- Published sessions define their draw schedule; this function idempotently creates
 -- the draw_waves consumed by process_due_wave().
+-- This pending migration also activates the governed auto-apply path after PR #14.
 
 create or replace function public.ensure_draw_waves()
 returns integer
