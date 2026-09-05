@@ -18,10 +18,6 @@ concurrency:
 
 env:
   NODE_VERSION: '24'
-  # Prototype defaults. These are intentionally non-secret and may be replaced
-  # by verified-domain production configuration after Slice C acceptance.
-  RESEND_FROM_EMAIL: 'onboarding@resend.dev'
-  APP_BASE_URL: 'https://rembayung-access.pages.dev'
 
 jobs:
   deploy-broadcast-worker:
@@ -55,8 +51,7 @@ jobs:
           else
             echo 'Resend prototype configuration: INACTIVE — RESEND_API_KEY missing'
           fi
-          echo "Prototype sender: $RESEND_FROM_EMAIL"
-          echo "Prototype app base URL: $APP_BASE_URL"
+          echo 'Prototype sender and app URL are governed by workers/broadcast/wrangler.jsonc'
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -75,14 +70,9 @@ jobs:
           secrets: |
             SUPABASE_SECRET_KEY
             RESEND_API_KEY
-        vars: |
-          RESEND_FROM_EMAIL
-          APP_BASE_URL
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ env.RESEND_FROM_EMAIL }}
-          APP_BASE_URL: ${{ env.APP_BASE_URL }}
 
       - name: Deploy broadcast worker without Resend
         if: env.RESEND_API_KEY == ''
