@@ -3,6 +3,7 @@ interface Env {
   SUPABASE_SECRET_KEY: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
+  RESEND_TEST_RECIPIENT?: string;
   APP_BASE_URL?: string;
 }
 
@@ -66,6 +67,7 @@ async function sendResendInvitation(env: Env, delivery: ClaimedDelivery) {
   const url = invitationUrl(env, delivery.invitation_token);
   const sessionTitle = escapeHtml(delivery.session_title);
   const safeUrl = escapeHtml(url);
+  const recipientEmail = env.RESEND_TEST_RECIPIENT ?? delivery.recipient_email;
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -76,7 +78,7 @@ async function sendResendInvitation(env: Env, delivery: ClaimedDelivery) {
     },
     body: JSON.stringify({
       from: env.RESEND_FROM_EMAIL,
-      to: [delivery.recipient_email],
+      to: [recipientEmail],
       subject: `Jemputan Rembayung — ${delivery.session_title}`,
       html: [
         '<p>Anda telah dipilih untuk meneruskan tempahan.</p>',
@@ -154,6 +156,7 @@ async function drainEmailDeliveries(env: Env) {
         deliveryId: delivery.delivery_id,
         invitationId: delivery.invitation_id,
         attemptCount: delivery.attempt_count,
+        testRecipientOverride: Boolean(env.RESEND_TEST_RECIPIENT),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown delivery failure';
