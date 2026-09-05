@@ -4,8 +4,6 @@
   "compatibility_date": "2026-09-04",
   "vars": {
     "SUPABASE_URL": "https://irqqpevmjaqggtmktbxf.supabase.co",
-    "RESEND_FROM_EMAIL": "onboarding@resend.dev",
-    "RESEND_TEST_RECIPIENT": "delivered@resend.dev",
     "APP_BASE_URL": "https://rembayung-access.pages.dev"
   },
   "triggers": {
