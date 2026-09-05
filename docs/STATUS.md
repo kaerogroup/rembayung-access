@@ -5,79 +5,92 @@ Last updated: 2026-09-05
 Slice A is implemented and production-connected.
 Slice B scheduled random draw is COMPLETE — production runtime accepted.
 Slice C Resend invitation delivery is COMPLETE for prototype acceptance — production Worker transport, retry/outbox state and token clearing were runtime verified.
-Slice D authenticated invitation gate is COMPLETE — core authority and full human-visible golden-path production acceptance are now verified.
+Slice D authenticated invitation gate is COMPLETE — core authority and full human-visible golden-path production acceptance are verified.
+Capacity-aware fair allocation is COMPLETE — focused and 120-candidate production acceptance are verified.
+Slice E minimum admin is COMPLETE — authority, operational projection, admin bootstrap and production runtime checkpoint are verified.
 
-## Slice B production acceptance
+## Golden path
 
-- authenticated interest persisted successfully;
-- Cloudflare Cron fired without admin action;
-- Wave 1 completed with `selected_count = 1`;
-- the active interest became `selected` exactly once;
-- exactly one invitation was created;
-- Wave 2 completed with `selected_count = 0`;
-- invitation count remained exactly one;
-- both completed waves recorded no error.
+The normal production-connected flow is accepted:
 
-Runtime defects found during Slice B acceptance were fixed through governed changes: the Worker uses the Supabase secret as an API key rather than a Bearer JWT, and `process_due_wave()` schema-qualifies Supabase `pgcrypto` routines under `extensions`.
+`authenticated join -> natural Cron draw -> invitation -> Resend delivery -> authenticated Rembayung gate -> audited UMAI continuation`
 
-## Slice C prototype acceptance
+The accepted golden-path session produced exactly one entitlement, one delivery and one redirect audit without a manual draw or duplicate invitation.
 
-Implemented and production-deployed:
-- retryable database-backed invitation delivery outbox;
-- transient invitation token retained only while delivery remains actionable and cleared after send/expiry;
-- service-role-only claim/complete/fail/expire delivery RPCs;
-- bounded retries and stale-send reclaim;
-- Resend transport with stable per-invitation idempotency key;
-- governed Cloudflare deployment with `RESEND_API_KEY` kept server-only;
-- prototype sender `onboarding@resend.dev`;
-- prototype transport override to Resend test recipient `delivered@resend.dev`, while the authoritative recipient remains unchanged in the database.
+## Capacity-aware fair allocation — COMPLETE
 
-Runtime evidence from `[TEST] Slice C — Resend Delivery Runtime`:
-- authenticated interest entered the production pool;
-- natural Cloudflare Cron selected the interest and issued exactly one invitation;
-- an outbox row was created with a retryable transient token;
-- initial sends to a real recipient were rejected by the Resend test-sender restriction and retried with bounded backoff;
-- after the prototype test-recipient override was deployed, the same outbox row retried successfully;
-- Resend recorded exactly one delivered test email at 2026-09-05 09:44:43 MYT;
-- the delivery row transitioned to `sent` with `attempt_count = 5`, `last_error = null` and no retained invitation token;
-- production checkpoint recorded `rows_retaining_token = 0` and no stuck `pending` or `sending` rows.
+Migration `20260905000800_capacity_aware_allocation.sql` introduced:
+- session-specific `min_party_size` and `max_party_size`;
+- optional `allocation_capacity_pax` separate from UMAI table inventory;
+- stable per-interest `selection_key` random priority;
+- `draw_waves.selected_pax` observability;
+- session-serialized capacity-aware `process_due_wave()` selection;
+- dynamic party-size choices in the PWA.
 
-Production-hardening remains separate from prototype acceptance: before emailing real users, verify a custom sending domain, remove `RESEND_TEST_RECIPIENT`, use a domain-scoped sending key, and rotate the prototype API key.
+Production acceptance migration `20260905000900_capacity_runtime_acceptance.sql` proved:
+- session-specific party-size enforcement;
+- cancel/rejoin does not reroll stable priority;
+- exact-fit pax allocation works;
+- a valid party that cannot fit remaining capacity is skipped;
+- selected-pax accounting is correct;
+- repeated processing does not create duplicate entitlement.
 
-## Slice D / golden-path production acceptance
+Load/fairness migration `20260905001000_capacity_load_fairness_acceptance.sql` then exercised the real allocation path with 120 mixed-party synthetic candidate references, without inserting fake Auth users. It proved:
+- selection follows stable random priority rather than first-come-first-served order;
+- the selected set exactly matches the priority + capacity-fit contract;
+- pax budget is respected;
+- one invitation is created per selected interest;
+- repeated processing is idempotent.
 
-Implemented and production-applied:
-- static-export-safe Rembayung invitation page at `/invitation?token=...`;
-- authenticated `open_invitation(text)` PostgreSQL RPC;
-- authenticated `redirect_invitation(text,text)` PostgreSQL RPC;
-- token hashing and ownership checks remain server/database-side;
-- expiry and revocation are revalidated before redirect eligibility;
-- valid `issued` invitations transition idempotently to `opened`;
-- UMAI destination is read from canonical `booking_sessions.umai_url`, not chosen by the browser;
-- redirect actions are recorded in `redirect_audits`;
-- new invitation emails point back to the Rembayung invitation gate rather than directly to UMAI.
+This remains access-capacity allocation only. UMAI is still final authority for real date/time/table availability, deposit, payment and reservation confirmation.
 
-Production verification migration `20260905000600_slice_d_runtime_acceptance.sql` applied successfully and proved valid-owner, wrong-owner, repeat-redirect and expiry boundaries.
+## Slice E minimum admin — COMPLETE
 
-Full end-to-end golden-path acceptance then completed using `[TEST] Golden Path — Invitation Gate` without a manual draw:
-- user joined through the normal authenticated PWA flow at 10:16:36 MYT;
-- natural Cloudflare Cron processed Wave 1 at 10:37:49 MYT with `selected_count = 1` and no error;
-- the interest transitioned `active -> selected` exactly once;
-- exactly one invitation and exactly one delivery were created;
-- Resend delivery completed at 10:37:50 MYT with `attempt_count = 1`, provider message ID present, `last_error = null` and transient token cleared;
-- the invitation route was opened by the authenticated owner at 10:46:03 MYT;
-- the redirect boundary was exercised at 10:46:25 MYT;
-- final invitation status is `redirected`;
-- `redirect_audit_count = 1`;
-- no duplicate invitation/entitlement was created.
+Migration `20260905001100_slice_e_minimum_admin.sql` added:
+- `platform_admins` membership with RLS;
+- service-role-only admin grant/revoke bootstrap authority;
+- authenticated `is_platform_admin()`;
+- `admin_create_session(...)` for draft session configuration;
+- `admin_publish_session(uuid)` for controlled publication;
+- `admin_list_sessions()` for pool/wave/invitation/delivery operational projection;
+- no authenticated direct-write authority to canonical booking tables.
 
-Golden path is therefore COMPLETE / production runtime accepted.
+The mobile-first `/admin` PWA surface now supports:
+- session title/timeline configuration;
+- min/max party size;
+- allocation pax budget;
+- wave size, interval and maximum waves;
+- invitation TTL;
+- downstream UMAI URL;
+- draft creation and publication;
+- operational counts for interests, waves, invitations and email delivery.
+
+Production acceptance migration `20260905001200_slice_e_runtime_acceptance.sql` proved admin membership, create, observe, publish, non-admin rejection and cleanup boundaries.
+
+Operational bootstrap migration `20260905001300_bootstrap_single_operator_admin.sql` was then applied after a UUID-aggregate compatibility fix. The post-apply runtime checkpoint confirmed:
+- exactly one current Auth identity;
+- exactly one platform admin;
+- the accepted golden-path operator is that admin;
+- all Slice E admin table/RPC objects are present.
+
+Therefore the current accepted operator can use `/admin` without browser self-elevation or exposing identity details.
+
+## Resend prototype status
+
+Prototype delivery is accepted, but real-user email hardening remains deliberately separate. Before real-user launch:
+- verify a custom sending domain;
+- remove `RESEND_TEST_RECIPIENT`;
+- rotate the prototype Resend API key and prefer a domain-scoped sending-only key;
+- perform one real-domain delivery acceptance.
 
 ## Active next focus
 
-Move from single-entitlement technical acceptance to capacity-aware allocation while preserving random-first fairness:
-- make party-size limits session-specific rather than globally assumed;
-- configure the real Rembayung venue contract as 3–8 pax while keeping the platform reusable for other venues;
-- introduce capacity-aware random allocation so total selected pax cannot exceed the session allocation budget;
-- keep UMAI as final table/time/deposit/reservation authority;
-- then run a larger fairness/idempotency acceptance with 100+ dummy interests before broadening the admin surface.
+Operationalize a real Rembayung session through the accepted admin surface rather than adding more allocation architecture:
+- verify the production `/admin` route and authenticated operator experience;
+- enter one real session configuration with the venue-approved party-size range, pax allocation budget, release timing, wave settings and UMAI destination;
+- review the draft before publication;
+- publish only when the venue schedule/configuration is authoritative;
+- observe the first real pool through existing read-only operational projections;
+- harden Resend custom-domain delivery before invitations are sent to real users.
+
+Do not broaden into payments, table allocation, predictive AI, advanced anti-fraud or UMAI replacement at this checkpoint.
