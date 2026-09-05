@@ -11,6 +11,8 @@ type BookingSession = {
   interest_opens_at: string
   interest_closes_at: string
   draw_starts_at: string
+  min_party_size: number
+  max_party_size: number
   status: 'published'
 }
 
@@ -56,7 +58,7 @@ export default function HomePage() {
       await Promise.all([
         supabase
           .from('booking_sessions')
-          .select('id,title,starts_at,interest_opens_at,interest_closes_at,draw_starts_at,status')
+          .select('id,title,starts_at,interest_opens_at,interest_closes_at,draw_starts_at,min_party_size,max_party_size,status')
           .eq('status', 'published')
           .order('starts_at', { ascending: true }),
         supabase
@@ -132,13 +134,13 @@ export default function HomePage() {
     setMessage('Anda telah log keluar.')
   }
 
-  async function joinInterest(sessionId: string) {
+  async function joinInterest(session: BookingSession) {
     if (!isOnline) return
     setBusy(true)
     setMessage(null)
-    const partySize = partySizes[sessionId] ?? 2
+    const partySize = partySizes[session.id] ?? session.min_party_size
     const { error } = await supabase.rpc('join_interest', {
-      p_session_id: sessionId,
+      p_session_id: session.id,
       p_party_size: partySize
     })
     setBusy(false)
@@ -230,6 +232,10 @@ export default function HomePage() {
                 const isOpen = now >= opensAt && now <= closesAt
                 const interest = interestBySession.get(session.id)
                 const active = interest?.status === 'active'
+                const availablePartySizes = Array.from(
+                  { length: session.max_party_size - session.min_party_size + 1 },
+                  (_, index) => session.min_party_size + index
+                )
 
                 return (
                   <article className="card" key={session.id}>
@@ -238,6 +244,7 @@ export default function HomePage() {
                       <span>Sesi: {formatKualaLumpur(session.starts_at)}</span>
                       <span>Interest pool tutup: {formatKualaLumpur(session.interest_closes_at)}</span>
                       <span>Draw bermula: {formatKualaLumpur(session.draw_starts_at)}</span>
+                      <span>Saiz kumpulan: {session.min_party_size}–{session.max_party_size} orang</span>
                     </div>
 
                     {interest?.status === 'selected' ? (
@@ -254,17 +261,17 @@ export default function HomePage() {
                         <label>
                           <span className="muted">Bilangan tetamu</span>
                           <select
-                            value={partySizes[session.id] ?? 2}
+                            value={partySizes[session.id] ?? session.min_party_size}
                             onChange={(event) =>
                               setPartySizes((current) => ({ ...current, [session.id]: Number(event.target.value) }))
                             }
                           >
-                            {[2, 3, 4, 5, 6, 7, 8].map((size) => (
+                            {availablePartySizes.map((size) => (
                               <option key={size} value={size}>{size} orang</option>
                             ))}
                           </select>
                         </label>
-                        <button disabled={busy || !isOnline || !isOpen} onClick={() => joinInterest(session.id)}>
+                        <button disabled={busy || !isOnline || !isOpen} onClick={() => joinInterest(session)}>
                           {!isOnline ? 'Perlu online' : isOpen ? 'Daftar minat' : now < opensAt ? 'Belum dibuka' : 'Interest pool ditutup'}
                         </button>
                       </div>
