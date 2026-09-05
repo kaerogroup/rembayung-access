@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
@@ -77,14 +77,20 @@ function toIso(value: string) {
   return new Date(value).toISOString()
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null)
+  const [authResolved, setAuthResolved] = useState(false)
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
   const [sessions, setSessions] = useState<AdminSession[]>([])
   const [draft, setDraft] = useState<SessionDraft>(emptyDraft)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
+  const userRef = useRef<User | null>(null)
 
   const publishedCount = useMemo(
     () => sessions.filter((session) => session.status === 'published').length,
@@ -98,61 +104,121 @@ export default function AdminPage() {
       return
     }
 
-    const { data: adminData, error: adminError } = await supabase.rpc('is_platform_admin')
+    try {
+      let adminResult = await supabase.rpc('is_platform_admin')
 
-    if (adminError) {
-      setIsAdmin(false)
-      setMessage('Status admin tidak dapat disahkan sekarang.')
-      return
+      if (adminResult.error && navigator.onLine) {
+        await wait(500)
+        adminResult = await supabase.rpc('is_platform_admin')
+      }
+
+      if (adminResult.error) {
+        setMessage('Sambungan terganggu. Status admin terakhir dikekalkan; cuba Refresh sebentar lagi.')
+        return
+      }
+
+      const allowed = adminResult.data === true
+      setIsAdmin(allowed)
+
+      if (!allowed) {
+        setSessions([])
+        setMessage(null)
+        return
+      }
+
+      let sessionsResult = await supabase.rpc('admin_list_sessions')
+
+      if (sessionsResult.error && navigator.onLine) {
+        await wait(500)
+        sessionsResult = await supabase.rpc('admin_list_sessions')
+      }
+
+      if (sessionsResult.error) {
+        setMessage('Sambungan terganggu. Data operasi terakhir dikekalkan; cuba Refresh sebentar lagi.')
+        return
+      }
+
+      setSessions((sessionsResult.data ?? []) as AdminSession[])
+      setMessage(null)
+    } catch {
+      setMessage('Sambungan terganggu. Sesi admin semasa dikekalkan; cuba Refresh sebentar lagi.')
     }
-
-    const allowed = adminData === true
-    setIsAdmin(allowed)
-
-    if (!allowed) {
-      setSessions([])
-      return
-    }
-
-    const { data, error } = await supabase.rpc('admin_list_sessions')
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    setSessions((data ?? []) as AdminSession[])
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     setIsOnline(navigator.onLine)
 
-    void supabase.auth.getUser().then(({ data }) => {
-      const currentUser = data.user ?? null
+    const applyUser = (currentUser: User | null) => {
+      userRef.current = currentUser
       setUser(currentUser)
-      void refresh(currentUser)
-    })
+      setAuthResolved(true)
+
+      if (!currentUser) {
+        setIsAdmin(null)
+        setSessions([])
+        return
+      }
+
+      if (navigator.onLine) void refresh(currentUser)
+    }
+
+    void supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (cancelled) return
+
+        if (error) {
+          setAuthResolved(true)
+          setMessage('Sesi tersimpan belum dapat disahkan kerana sambungan terganggu. Cuba Refresh.')
+          return
+        }
+
+        applyUser(data.session?.user ?? null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAuthResolved(true)
+        setMessage('Sesi tersimpan belum dapat disahkan kerana sambungan terganggu. Cuba Refresh.')
+      })
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return
       const currentUser = session?.user ?? null
+      userRef.current = currentUser
       setUser(currentUser)
-      void refresh(currentUser)
+      setAuthResolved(true)
+
+      if (!currentUser) {
+        setIsAdmin(null)
+        setSessions([])
+        return
+      }
+
+      window.setTimeout(() => {
+        if (!cancelled && navigator.onLine) void refresh(currentUser)
+      }, 0)
     })
 
     const syncNetwork = () => {
       const online = navigator.onLine
       setIsOnline(online)
-      if (online) void refresh(user)
+
+      if (online && userRef.current) {
+        void refresh(userRef.current)
+      }
     }
 
     window.addEventListener('online', syncNetwork)
     window.addEventListener('offline', syncNetwork)
 
     return () => {
+      cancelled = true
       subscription.subscription.unsubscribe()
       window.removeEventListener('online', syncNetwork)
       window.removeEventListener('offline', syncNetwork)
     }
-  }, [refresh, user])
+  }, [refresh])
 
   async function createSession(event: FormEvent) {
     event.preventDefault()
@@ -230,7 +296,9 @@ export default function AdminPage() {
 
       {message && <div className="status">{message}</div>}
 
-      {!user ? (
+      {!authResolved ? (
+        <section className="card muted">Memulihkan sesi admin…</section>
+      ) : !user ? (
         <section className="card stack">
           <h2>Log masuk dahulu</h2>
           <p className="muted">Gunakan akaun Rembayung yang telah diberikan platform-admin membership.</p>
