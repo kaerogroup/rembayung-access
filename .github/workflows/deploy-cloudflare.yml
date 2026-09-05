@@ -26,8 +26,6 @@ jobs:
     environment: production
     env:
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
-      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,19 +46,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "$RESEND_API_KEY" ] && [ -n "$RESEND_FROM_EMAIL" ] && [ -n "$APP_BASE_URL" ]; then
-            echo 'Resend production configuration: ENABLED'
+          if [ -n "$RESEND_API_KEY" ]; then
+            echo 'Resend prototype configuration: ENABLED'
           else
-            echo 'Resend production configuration: INACTIVE'
+            echo 'Resend prototype configuration: INACTIVE — RESEND_API_KEY missing'
           fi
+          echo 'Prototype sender and app URL are governed by workers/broadcast/wrangler.jsonc'
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Deploy broadcast worker with Resend
-        if: env.RESEND_API_KEY != '' && env.RESEND_FROM_EMAIL != '' && env.APP_BASE_URL != ''
+      - name: Deploy broadcast worker with prototype Resend
+        if: env.RESEND_API_KEY != ''
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -71,16 +70,12 @@ jobs:
           secrets: |
             SUPABASE_SECRET_KEY
             RESEND_API_KEY
-            RESEND_FROM_EMAIL
-            APP_BASE_URL
         env:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
-          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
 
       - name: Deploy broadcast worker without Resend
-        if: env.RESEND_API_KEY == '' || env.RESEND_FROM_EMAIL == '' || env.APP_BASE_URL == ''
+        if: env.RESEND_API_KEY == ''
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

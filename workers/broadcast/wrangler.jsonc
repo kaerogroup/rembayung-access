@@ -3,7 +3,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-09-04",
   "vars": {
-    "SUPABASE_URL": "https://irqqpevmjaqggtmktbxf.supabase.co"
+    "SUPABASE_URL": "https://irqqpevmjaqggtmktbxf.supabase.co",
+    "RESEND_FROM_EMAIL": "onboarding@resend.dev",
+    "APP_BASE_URL": "https://rembayung-access.pages.dev"
   },
   "triggers": {
     "crons": ["* * * * *"]
