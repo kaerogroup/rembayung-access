@@ -24,6 +24,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,12 +44,43 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$SUPABASE_SECRET_KEY"
 
+      - name: Report invitation email configuration state
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$RESEND_API_KEY" ] && [ -n "$RESEND_FROM_EMAIL" ] && [ -n "$APP_BASE_URL" ]; then
+            echo 'Resend production configuration: ENABLED'
+          else
+            echo 'Resend production configuration: INACTIVE'
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Deploy broadcast worker
+      - name: Deploy broadcast worker with Resend
+        if: env.RESEND_API_KEY != '' && env.RESEND_FROM_EMAIL != '' && env.APP_BASE_URL != ''
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/broadcast
+          wranglerVersion: '4'
+          command: deploy
+          secrets: |
+            SUPABASE_SECRET_KEY
+            RESEND_API_KEY
+            RESEND_FROM_EMAIL
+            APP_BASE_URL
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+
+      - name: Deploy broadcast worker without Resend
+        if: env.RESEND_API_KEY == '' || env.RESEND_FROM_EMAIL == '' || env.APP_BASE_URL == ''
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
