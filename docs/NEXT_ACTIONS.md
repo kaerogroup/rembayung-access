@@ -1,14 +1,34 @@
 # NEXT ACTIONS
 
-## Active slice — Slice C Resend invitation delivery
+## Active checkpoint — Slice C production email acceptance
 
-1. Consume pending `email_deliveries` created by successful draw selection.
-2. Send the transactional invitation email through Resend from server/Worker runtime only.
-3. Construct the invitation URL back into Rembayung Access; never email the UMAI URL directly.
-4. Record delivery provider result, provider message ID, attempt count, sent timestamp and bounded failure information.
-5. Make delivery retry-safe and idempotent so scheduler/network retries do not duplicate entitlement or uncontrolled email sends.
-6. Verify production delivery against the existing invitation/outbox authority.
-7. Keep the notification architecture extensible for Supabase Realtime in-app updates and future Web Push; notification channels remain signals, never transactional authority.
+Slice C delivery implementation is already merged, migrated and deployed. Do not rebuild the delivery architecture.
+
+1. Configure the GitHub `production` environment with all three required values:
+   - `RESEND_API_KEY`
+   - `RESEND_FROM_EMAIL`
+   - `APP_BASE_URL`
+2. Run the governed Cloudflare Broadcast Worker deployment and confirm it selects the `with Resend` path.
+3. Create a fresh bounded production acceptance invitation through the existing draw authority; do not reconstruct or reuse the pre-Slice-C invitation token.
+4. Verify the outbox transitions `pending -> sending -> sent`.
+5. Verify exactly one Resend provider message ID is recorded and `attempt_count` remains bounded.
+6. Verify the transient outbox invitation token is cleared after `sent`.
+7. Re-run the Slice C runtime checkpoint and confirm no duplicate send or stuck `sending` row.
+8. Record Slice C production acceptance in project state.
+
+## Implemented Slice C foundation
+
+- database-backed retryable invitation email outbox;
+- transient token persistence only while delivery remains actionable;
+- service-role-only claim, complete, fail and expire RPCs;
+- retry backoff and stale-send reclaim;
+- Resend transport in the Cloudflare Broadcast Worker;
+- stable per-invitation Resend idempotency key;
+- invitation email returns to Rembayung Access rather than UMAI;
+- read-only production delivery checkpoint;
+- governed Worker deploy supports both Resend-enabled and safe inactive modes.
+
+Current production evidence shows the Worker Cron is healthy but Resend delivery is inactive because production configuration is incomplete.
 
 ## After Slice C
 
@@ -30,5 +50,6 @@
 
 - No UMAI replacement in MVP.
 - Invitation email returns to Rembayung Access, not directly to UMAI.
+- Never log recipient email addresses or plaintext invitation tokens in operational diagnostics.
 - No payment, QR/device binding or advanced anti-fraud yet.
 - No large re-audit before each slice; use focused CI, migration and runtime checkpoints.
