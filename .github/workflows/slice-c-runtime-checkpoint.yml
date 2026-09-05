@@ -1,0 +1,92 @@
+name: Slice C Runtime Checkpoint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/slice-c-runtime-checkpoint.yml'
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_PROJECT_REF"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Inspect Slice C production delivery state
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db query --linked "
+          select jsonb_pretty(
+            jsonb_build_object(
+              'db_now', now(),
+              'summary', (
+                select to_jsonb(s)
+                from (
+                  select
+                    count(*) as total,
+                    count(*) filter (where status = 'pending') as pending,
+                    count(*) filter (where status = 'sending') as sending,
+                    count(*) filter (where status = 'sent') as sent,
+                    count(*) filter (where status = 'failed') as failed,
+                    count(*) filter (where invitation_token is not null) as rows_retaining_token,
+                    max(attempt_count) as max_attempt_count
+                  from public.email_deliveries
+                ) s
+              ),
+              'deliveries', coalesce((
+                select jsonb_agg(
+                  jsonb_build_object(
+                    'delivery_id', d.id,
+                    'invitation_id', d.invitation_id,
+                    'provider', d.provider,
+                    'status', d.status,
+                    'attempt_count', d.attempt_count,
+                    'has_token', d.invitation_token is not null,
+                    'next_attempt_at', d.next_attempt_at,
+                    'claimed_at', d.claimed_at,
+                    'sent_at', d.sent_at,
+                    'last_error', d.last_error,
+                    'invitation_status', i.status,
+                    'expires_at', i.expires_at,
+                    'session_title', s.title
+                  ) order by d.created_at desc
+                )
+                from public.email_deliveries d
+                join public.invitations i on i.id = d.invitation_id
+                join public.booking_sessions s on s.id = i.session_id
+              ), '[]'::jsonb)
+            )
+          ) as runtime_state;
+          "
