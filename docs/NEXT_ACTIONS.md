@@ -1,78 +1,65 @@
 # NEXT ACTIONS
 
-## Active checkpoint — complete golden-path acceptance
+## Completed checkpoint — end-to-end golden path
 
-Slice D core invitation authority is implemented, production-applied and verified. Do not rebuild the invitation RPCs, draw architecture or delivery outbox.
+The full production-connected golden path is now accepted. Do not rebuild the existing draw, delivery outbox or invitation authority.
 
-Next focused checkpoint:
+Verified path:
 
-1. Create a fresh bounded acceptance session using the existing session/draw authority.
-2. Join through the normal authenticated PWA flow.
-3. Let natural Cloudflare Cron perform the scheduled random draw; do not invoke the draw manually.
-4. Verify exactly one invitation and retryable delivery row are created.
-5. Let the existing Resend prototype transport deliver the invitation test message exactly once.
-6. Open the new `/invitation?token=...` Rembayung route from the generated invitation link.
-7. Verify the intended authenticated owner sees the session details and actionable invitation state.
-8. Verify the redirect action is revalidated by PostgreSQL and returns only the configured UMAI destination.
-9. Verify `redirect_audits` records the action and the invitation reaches `redirected` without creating a second entitlement.
-10. Record the end-to-end golden path in project state.
+1. authenticated user joined `[TEST] Golden Path — Invitation Gate` through the normal PWA flow;
+2. natural Cloudflare Cron processed the scheduled wave without a manual draw;
+3. Wave 1 completed with `selected_count = 1` and no error;
+4. the interest transitioned `active -> selected` exactly once;
+5. exactly one invitation and one delivery were created;
+6. Resend prototype transport sent exactly one test message with `attempt_count = 1`;
+7. the transient invitation token was cleared after successful delivery;
+8. the authenticated owner opened `/invitation?token=...`;
+9. PostgreSQL revalidated the redirect boundary and returned only the canonical configured downstream destination;
+10. the invitation reached `redirected` and exactly one `redirect_audits` row was recorded;
+11. no second entitlement was created.
 
-If direct browser access to Cloudflare Pages remains unavailable through connected tooling, do not weaken the authority checks. Use available runtime evidence and leave only the human-visible page interaction as an explicit founder acceptance checkpoint.
+## Active focus — capacity-aware fair allocation
 
-## Completed checkpoint — Slice D core invitation authority
+The next implementation should improve allocation quality without changing the product boundary: Rembayung Access controls fair access; UMAI remains final booking/table/deposit authority.
 
-- `/invitation?token=...` static PWA route implemented;
-- authenticated `open_invitation(text)` resolves only token + owner matches;
-- expired/revoked state is enforced by PostgreSQL;
-- valid `issued` invitation becomes `opened` idempotently;
-- authenticated `redirect_invitation(text,text)` revalidates before returning a destination;
-- UMAI destination comes from canonical `booking_sessions.umai_url`;
-- redirect actions are inserted into `redirect_audits`;
-- repeated redirect returns the same destination without creating another entitlement;
-- production verification migration `20260905000600_slice_d_runtime_acceptance.sql` PASS for valid owner, wrong owner, repeat redirect and expiry behavior;
-- temporary acceptance fixture was cleaned before migration commit;
-- invitation page typecheck/build/static PWA output PASS.
+Focused implementation order:
 
-The first attempted runtime harness using `supabase db query --linked` was retired because that Management API query path is read-only in this environment. The governed verification migration is the accepted runtime evidence path for write assertions.
+1. Add session-specific `min_party_size` and `max_party_size` with safe defaults compatible with existing sessions.
+2. Update `join_interest()` to validate against the selected session's limits rather than a global 2–8 assumption.
+3. Configure real Rembayung venue sessions for 3–8 pax; children/babies counting toward pax remains venue policy/informational context, not identity authority.
+4. Add a session allocation capacity/budget in pax, separate from UMAI's final table inventory.
+5. Evolve random-first selection into capacity-aware random allocation: random priority remains the fairness mechanism, but a candidate is selected only when its party size fits the remaining allocation budget.
+6. Keep browser and admin surfaces out of winner authority; PostgreSQL remains selection authority.
+7. Preserve idempotency: reruns must not create duplicate invitations or exceed the allocation budget.
+8. Add focused SQL verification for mixed party sizes, exact-fit, residual capacity smaller than remaining parties, zero eligible interests and repeated processing.
+9. Run a larger fairness/idempotency acceptance with 100+ dummy interests only after the capacity rules pass focused verification.
+10. After capacity acceptance, proceed to Slice E minimum admin for session configuration and operational observation.
 
-## Completed checkpoint — Slice C prototype delivery
+Do not introduce predictive AI, aggressive overbooking, advanced anti-fraud, payment or table-layout logic in this slice. Those need runtime data and are not required to solve the current scarce-capacity allocation problem.
 
-- production Worker deployed with Resend transport enabled;
-- fresh invitation created through the existing natural Cron draw path;
-- database-backed outbox and bounded retry behavior verified;
-- Resend test-sender restriction was handled by a prototype-only transport override to `delivered@resend.dev`;
-- authoritative recipient data remained unchanged in the outbox;
-- exactly one test email was accepted/delivered by Resend;
-- final delivery state is `sent`;
-- transient invitation token was cleared after send;
-- no stuck `pending`/`sending` row and no retained plaintext token remain.
+## Production hardening still pending separately
 
-Before real-user email production launch:
+Before real-user email launch:
 - verify a custom sending domain;
 - remove `RESEND_TEST_RECIPIENT`;
 - rotate the prototype API key and prefer a domain-scoped sending-only key;
-- perform one real-domain delivery acceptance without changing invitation authority.
+- perform one real-domain delivery acceptance.
 
-## After golden-path acceptance
+## Later optimization path
 
-1. Run larger fairness/idempotency acceptance with 100+ dummy interests.
-2. Slice E — minimum admin surface for session configuration and operational observation.
-3. Add foreground Supabase Realtime projections and later Web Push without changing PostgreSQL authority.
-
-## Completed checkpoint — Slice B
-
-- production Cloudflare Cron verified firing;
-- Wave 1 completed with one selection and one invitation;
-- Wave 2 completed with zero further selections;
-- invitation total remained one;
-- no duplicate entitlement;
-- production pgcrypto schema-resolution defect corrected through migration `20260905000200_fix_slice_b_pgcrypto_schema.sql`.
+After capacity-aware allocation is stable and measurable:
+- controlled multi-wave replenishment based on unused/expired entitlement capacity;
+- standby/reallocation for expired invitations;
+- optional slot preference and flexible-slot demand shaping;
+- conversion analytics from selection -> open -> downstream continuation;
+- only then consider data-driven wave-size recommendations or controlled oversubscription.
 
 ## Guardrails
 
 - No UMAI replacement in MVP.
+- Invitation is access entitlement, not a confirmed reservation.
 - Invitation email returns to Rembayung Access, not directly to UMAI.
 - Never log recipient email addresses or plaintext invitation tokens in operational diagnostics.
-- Browser state is never invitation/redirect authority.
+- Browser state is never invitation/redirect/winner authority.
 - No payment, QR/device binding or advanced anti-fraud yet.
 - No large re-audit before each slice; use focused CI, migration and runtime checkpoints.

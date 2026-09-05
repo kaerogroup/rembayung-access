@@ -5,7 +5,7 @@ Last updated: 2026-09-05
 Slice A is implemented and production-connected.
 Slice B scheduled random draw is COMPLETE — production runtime accepted.
 Slice C Resend invitation delivery is COMPLETE for prototype acceptance — production Worker transport, retry/outbox state and token clearing were runtime verified.
-Slice D authenticated invitation gate is COMPLETE for core authority acceptance — production database validation, state transitions and audited redirect boundaries were verified.
+Slice D authenticated invitation gate is COMPLETE — core authority and full human-visible golden-path production acceptance are now verified.
 
 ## Slice B production acceptance
 
@@ -44,7 +44,7 @@ Runtime evidence from `[TEST] Slice C — Resend Delivery Runtime`:
 
 Production-hardening remains separate from prototype acceptance: before emailing real users, verify a custom sending domain, remove `RESEND_TEST_RECIPIENT`, use a domain-scoped sending key, and rotate the prototype API key.
 
-## Slice D core authority acceptance
+## Slice D / golden-path production acceptance
 
 Implemented and production-applied:
 - static-export-safe Rembayung invitation page at `/invitation?token=...`;
@@ -57,14 +57,27 @@ Implemented and production-applied:
 - redirect actions are recorded in `redirect_audits`;
 - new invitation emails point back to the Rembayung invitation gate rather than directly to UMAI.
 
-Production verification migration `20260905000600_slice_d_runtime_acceptance.sql` applied successfully. Its assertions verified against the production database:
-- valid owner resolves the token and reaches `opened`;
-- wrong owner resolves zero rows for the same valid token;
-- valid redirect returns the canonical configured destination and records an audit;
-- repeated redirect returns the same destination without creating a new entitlement and is independently audited;
-- expired invitation becomes `expired`, returns no redirect destination and creates no further redirect audit;
-- all temporary acceptance fixture rows are removed before migration commit.
+Production verification migration `20260905000600_slice_d_runtime_acceptance.sql` applied successfully and proved valid-owner, wrong-owner, repeat-redirect and expiry boundaries.
 
-The PWA invitation route passed typecheck, build and static-output CI. Direct independent inspection of the Cloudflare Pages route was not available through the current tooling, so page-level golden-path production acceptance remains the next checkpoint rather than being implied.
+Full end-to-end golden-path acceptance then completed using `[TEST] Golden Path — Invitation Gate` without a manual draw:
+- user joined through the normal authenticated PWA flow at 10:16:36 MYT;
+- natural Cloudflare Cron processed Wave 1 at 10:37:49 MYT with `selected_count = 1` and no error;
+- the interest transitioned `active -> selected` exactly once;
+- exactly one invitation and exactly one delivery were created;
+- Resend delivery completed at 10:37:50 MYT with `attempt_count = 1`, provider message ID present, `last_error = null` and transient token cleared;
+- the invitation route was opened by the authenticated owner at 10:46:03 MYT;
+- the redirect boundary was exercised at 10:46:25 MYT;
+- final invitation status is `redirected`;
+- `redirect_audit_count = 1`;
+- no duplicate invitation/entitlement was created.
 
-Active checkpoint: complete end-to-end golden-path acceptance using a fresh invitation: join -> scheduled draw -> email delivery -> open in Rembayung -> authenticated validation -> UMAI redirect boundary.
+Golden path is therefore COMPLETE / production runtime accepted.
+
+## Active next focus
+
+Move from single-entitlement technical acceptance to capacity-aware allocation while preserving random-first fairness:
+- make party-size limits session-specific rather than globally assumed;
+- configure the real Rembayung venue contract as 3–8 pax while keeping the platform reusable for other venues;
+- introduce capacity-aware random allocation so total selected pax cannot exceed the session allocation budget;
+- keep UMAI as final table/time/deposit/reservation authority;
+- then run a larger fairness/idempotency acceptance with 100+ dummy interests before broadening the admin surface.
