@@ -17,6 +17,14 @@
       "url": "https://rembayung-access.pages.dev/manifest.webmanifest"
     }
   ],
+  "shortcuts": [
+    {
+      "name": "Operasi Admin",
+      "short_name": "Admin",
+      "description": "Buka ruang operasi admin Rembayung Access.",
+      "url": "/admin"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
