@@ -6,13 +6,23 @@ declare
   v_match_count integer;
   v_user_id uuid;
 begin
-  select count(*)::integer, min(u.id)
-  into v_match_count, v_user_id
+  select count(*)::integer
+  into v_match_count
   from auth.users u
   where lower(u.email) = lower('admin@access.my');
 
-  if v_match_count <> 1 or v_user_id is null then
+  if v_match_count <> 1 then
     raise exception 'admin_identity_not_unique: expected exactly one auth.users row for admin@access.my, found %', v_match_count;
+  end if;
+
+  select u.id
+  into v_user_id
+  from auth.users u
+  where lower(u.email) = lower('admin@access.my')
+  limit 1;
+
+  if v_user_id is null then
+    raise exception 'admin_identity_not_found';
   end if;
 
   insert into public.platform_admins(user_id)
