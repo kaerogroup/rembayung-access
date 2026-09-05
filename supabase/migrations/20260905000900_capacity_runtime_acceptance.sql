@@ -31,6 +31,8 @@ begin
   perform set_config('request.jwt.claim.sub', v_user_id::text, true);
 
   -- Exact-fit session: venue policy 3-8 pax, total allocation budget exactly 3 pax.
+  -- Session draw start remains after interest close to satisfy canonical lifecycle checks;
+  -- the test wave itself is explicitly due so process_due_wave() can be exercised transactionally.
   insert into public.booking_sessions(
     id, title, starts_at, interest_opens_at, interest_closes_at, draw_starts_at,
     wave_size, wave_interval_minutes, max_waves, invitation_ttl_minutes,
@@ -41,7 +43,7 @@ begin
     now() + interval '1 day',
     now() - interval '1 hour',
     now() + interval '1 hour',
-    now() - interval '30 minutes',
+    now() + interval '2 hours',
     10, 5, 1, 30,
     'https://example.invalid/capacity-exact',
     'published',
@@ -129,7 +131,7 @@ begin
     now() + interval '1 day',
     now() - interval '1 hour',
     now() + interval '1 hour',
-    now() - interval '30 minutes',
+    now() + interval '2 hours',
     10, 5, 1, 30,
     'https://example.invalid/capacity-oversize',
     'published',
