@@ -60,7 +60,7 @@ function escapeHtml(value: string) {
 
 function invitationUrl(env: Env, token: string) {
   const baseUrl = env.APP_BASE_URL!.replace(/\/$/, '');
-  return `${baseUrl}/invitations/${encodeURIComponent(token)}`;
+  return `${baseUrl}/invitation?token=${encodeURIComponent(token)}`;
 }
 
 async function sendResendInvitation(env: Env, delivery: ClaimedDelivery) {
