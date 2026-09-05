@@ -1,21 +1,39 @@
 # NEXT ACTIONS
 
-## Active checkpoint — Slice D invitation gate
+## Active checkpoint — complete golden-path acceptance
 
-Slice C prototype delivery acceptance is complete. Do not rebuild the draw or delivery architecture.
+Slice D core invitation authority is implemented, production-applied and verified. Do not rebuild the invitation RPCs, draw architecture or delivery outbox.
 
-Build the authenticated invitation gate as the next focused slice:
+Next focused checkpoint:
 
-1. Add the Rembayung invitation route for a token received from the invitation email.
-2. Resolve the token server-side against the stored invitation token hash; never expose hash authority to the browser.
-3. Require authenticated ownership: the current Supabase identity must match the invitation owner.
-4. Reject expired, revoked or otherwise non-actionable invitations.
-5. Mark a valid invitation `opened` through server authority when appropriate and idempotently.
-6. Present a clear confirmation surface explaining that the invitation is access to continue, not a completed reservation.
-7. Continue to the configured UMAI destination only through a server-validated action.
-8. Record the redirect in `redirect_audits` before/with the outbound UMAI redirect.
-9. Runtime-test valid owner, wrong owner, expired token and repeated-open/redirect behavior.
-10. Prove the complete golden path: join -> scheduled draw -> invitation -> delivery -> open in Rembayung -> validated UMAI redirect.
+1. Create a fresh bounded acceptance session using the existing session/draw authority.
+2. Join through the normal authenticated PWA flow.
+3. Let natural Cloudflare Cron perform the scheduled random draw; do not invoke the draw manually.
+4. Verify exactly one invitation and retryable delivery row are created.
+5. Let the existing Resend prototype transport deliver the invitation test message exactly once.
+6. Open the new `/invitation?token=...` Rembayung route from the generated invitation link.
+7. Verify the intended authenticated owner sees the session details and actionable invitation state.
+8. Verify the redirect action is revalidated by PostgreSQL and returns only the configured UMAI destination.
+9. Verify `redirect_audits` records the action and the invitation reaches `redirected` without creating a second entitlement.
+10. Record the end-to-end golden path in project state.
+
+If direct browser access to Cloudflare Pages remains unavailable through connected tooling, do not weaken the authority checks. Use available runtime evidence and leave only the human-visible page interaction as an explicit founder acceptance checkpoint.
+
+## Completed checkpoint — Slice D core invitation authority
+
+- `/invitation?token=...` static PWA route implemented;
+- authenticated `open_invitation(text)` resolves only token + owner matches;
+- expired/revoked state is enforced by PostgreSQL;
+- valid `issued` invitation becomes `opened` idempotently;
+- authenticated `redirect_invitation(text,text)` revalidates before returning a destination;
+- UMAI destination comes from canonical `booking_sessions.umai_url`;
+- redirect actions are inserted into `redirect_audits`;
+- repeated redirect returns the same destination without creating another entitlement;
+- production verification migration `20260905000600_slice_d_runtime_acceptance.sql` PASS for valid owner, wrong owner, repeat redirect and expiry behavior;
+- temporary acceptance fixture was cleaned before migration commit;
+- invitation page typecheck/build/static PWA output PASS.
+
+The first attempted runtime harness using `supabase db query --linked` was retired because that Management API query path is read-only in this environment. The governed verification migration is the accepted runtime evidence path for write assertions.
 
 ## Completed checkpoint — Slice C prototype delivery
 
@@ -35,7 +53,7 @@ Before real-user email production launch:
 - rotate the prototype API key and prefer a domain-scoped sending-only key;
 - perform one real-domain delivery acceptance without changing invitation authority.
 
-## After Slice D
+## After golden-path acceptance
 
 1. Run larger fairness/idempotency acceptance with 100+ dummy interests.
 2. Slice E — minimum admin surface for session configuration and operational observation.
