@@ -1,0 +1,125 @@
+name: Golden Path Runtime Checkpoint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/golden-path-runtime-checkpoint.yml'
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+
+jobs:
+  inspect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$SUPABASE_DB_PASSWORD"
+          test -n "$SUPABASE_PROJECT_REF"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link production project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Inspect golden-path production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db query --linked "
+          select jsonb_pretty(
+            jsonb_build_object(
+              'db_now', now(),
+              'session', (
+                select jsonb_build_object(
+                  'id', s.id,
+                  'title', s.title,
+                  'interest_opens_at', s.interest_opens_at,
+                  'interest_closes_at', s.interest_closes_at,
+                  'draw_starts_at', s.draw_starts_at,
+                  'status', s.status
+                )
+                from public.booking_sessions s
+                where s.id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              ),
+              'interests', coalesce((
+                select jsonb_agg(jsonb_build_object(
+                  'interest_id', i.id,
+                  'party_size', i.party_size,
+                  'status', i.status,
+                  'joined_at', i.joined_at,
+                  'selected_at', i.selected_at
+                ) order by i.joined_at)
+                from public.interests i
+                where i.session_id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              ), '[]'::jsonb),
+              'waves', coalesce((
+                select jsonb_agg(jsonb_build_object(
+                  'wave_id', w.id,
+                  'wave_no', w.wave_no,
+                  'scheduled_at', w.scheduled_at,
+                  'processed_at', w.processed_at,
+                  'status', w.status,
+                  'selected_count', w.selected_count,
+                  'error_message', w.error_message
+                ) order by w.wave_no)
+                from public.draw_waves w
+                where w.session_id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              ), '[]'::jsonb),
+              'invitations', coalesce((
+                select jsonb_agg(jsonb_build_object(
+                  'invitation_id', inv.id,
+                  'status', inv.status,
+                  'issued_at', inv.issued_at,
+                  'expires_at', inv.expires_at,
+                  'opened_at', inv.opened_at,
+                  'redirected_at', inv.redirected_at
+                ) order by inv.issued_at)
+                from public.invitations inv
+                where inv.session_id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              ), '[]'::jsonb),
+              'deliveries', coalesce((
+                select jsonb_agg(jsonb_build_object(
+                  'delivery_id', d.id,
+                  'invitation_id', d.invitation_id,
+                  'status', d.status,
+                  'attempt_count', d.attempt_count,
+                  'has_token', d.invitation_token is not null,
+                  'provider_message_id_present', d.provider_message_id is not null,
+                  'sent_at', d.sent_at,
+                  'last_error', d.last_error
+                ) order by d.created_at)
+                from public.email_deliveries d
+                join public.invitations inv on inv.id = d.invitation_id
+                where inv.session_id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              ), '[]'::jsonb),
+              'redirect_audit_count', (
+                select count(*)
+                from public.redirect_audits a
+                join public.invitations inv on inv.id = a.invitation_id
+                where inv.session_id = 'f0cc7c5e-5812-47c9-a405-aed71cb4eb73'::uuid
+              )
+            )
+          ) as runtime_state;
+          "
