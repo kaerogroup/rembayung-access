@@ -1,41 +1,45 @@
 # NEXT ACTIONS
 
-## Active checkpoint — Slice C production email acceptance
+## Active checkpoint — Slice D invitation gate
 
-Slice C delivery implementation is already merged, migrated and deployed. Do not rebuild the delivery architecture.
+Slice C prototype delivery acceptance is complete. Do not rebuild the draw or delivery architecture.
 
-1. Configure the GitHub `production` environment with all three required values:
-   - `RESEND_API_KEY`
-   - `RESEND_FROM_EMAIL`
-   - `APP_BASE_URL`
-2. Run the governed Cloudflare Broadcast Worker deployment and confirm it selects the `with Resend` path.
-3. Create a fresh bounded production acceptance invitation through the existing draw authority; do not reconstruct or reuse the pre-Slice-C invitation token.
-4. Verify the outbox transitions `pending -> sending -> sent`.
-5. Verify exactly one Resend provider message ID is recorded and `attempt_count` remains bounded.
-6. Verify the transient outbox invitation token is cleared after `sent`.
-7. Re-run the Slice C runtime checkpoint and confirm no duplicate send or stuck `sending` row.
-8. Record Slice C production acceptance in project state.
+Build the authenticated invitation gate as the next focused slice:
 
-## Implemented Slice C foundation
+1. Add the Rembayung invitation route for a token received from the invitation email.
+2. Resolve the token server-side against the stored invitation token hash; never expose hash authority to the browser.
+3. Require authenticated ownership: the current Supabase identity must match the invitation owner.
+4. Reject expired, revoked or otherwise non-actionable invitations.
+5. Mark a valid invitation `opened` through server authority when appropriate and idempotently.
+6. Present a clear confirmation surface explaining that the invitation is access to continue, not a completed reservation.
+7. Continue to the configured UMAI destination only through a server-validated action.
+8. Record the redirect in `redirect_audits` before/with the outbound UMAI redirect.
+9. Runtime-test valid owner, wrong owner, expired token and repeated-open/redirect behavior.
+10. Prove the complete golden path: join -> scheduled draw -> invitation -> delivery -> open in Rembayung -> validated UMAI redirect.
 
-- database-backed retryable invitation email outbox;
-- transient token persistence only while delivery remains actionable;
-- service-role-only claim, complete, fail and expire RPCs;
-- retry backoff and stale-send reclaim;
-- Resend transport in the Cloudflare Broadcast Worker;
-- stable per-invitation Resend idempotency key;
-- invitation email returns to Rembayung Access rather than UMAI;
-- read-only production delivery checkpoint;
-- governed Worker deploy supports both Resend-enabled and safe inactive modes.
+## Completed checkpoint — Slice C prototype delivery
 
-Current production evidence shows the Worker Cron is healthy but Resend delivery is inactive because production configuration is incomplete.
+- production Worker deployed with Resend transport enabled;
+- fresh invitation created through the existing natural Cron draw path;
+- database-backed outbox and bounded retry behavior verified;
+- Resend test-sender restriction was handled by a prototype-only transport override to `delivered@resend.dev`;
+- authoritative recipient data remained unchanged in the outbox;
+- exactly one test email was accepted/delivered by Resend;
+- final delivery state is `sent`;
+- transient invitation token was cleared after send;
+- no stuck `pending`/`sending` row and no retained plaintext token remain.
 
-## After Slice C
+Before real-user email production launch:
+- verify a custom sending domain;
+- remove `RESEND_TEST_RECIPIENT`;
+- rotate the prototype API key and prefer a domain-scoped sending-only key;
+- perform one real-domain delivery acceptance without changing invitation authority.
 
-1. Slice D — authenticated invitation gate, expiry/ownership validation and audited UMAI redirect.
-2. Prove the complete end-to-end golden path.
-3. Run larger fairness/idempotency acceptance with 100+ dummy interests.
-4. Slice E — minimum admin surface for session configuration and operational observation.
+## After Slice D
+
+1. Run larger fairness/idempotency acceptance with 100+ dummy interests.
+2. Slice E — minimum admin surface for session configuration and operational observation.
+3. Add foreground Supabase Realtime projections and later Web Push without changing PostgreSQL authority.
 
 ## Completed checkpoint — Slice B
 
@@ -51,5 +55,6 @@ Current production evidence shows the Worker Cron is healthy but Resend delivery
 - No UMAI replacement in MVP.
 - Invitation email returns to Rembayung Access, not directly to UMAI.
 - Never log recipient email addresses or plaintext invitation tokens in operational diagnostics.
+- Browser state is never invitation/redirect authority.
 - No payment, QR/device binding or advanced anti-fraud yet.
 - No large re-audit before each slice; use focused CI, migration and runtime checkpoints.
