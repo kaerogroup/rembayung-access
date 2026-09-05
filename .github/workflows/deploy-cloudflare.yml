@@ -42,23 +42,24 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$SUPABASE_SECRET_KEY"
 
-      - name: Report invitation email configuration state
+      - name: Report invitation email transport state
         shell: bash
         run: |
           set -euo pipefail
           if [ -n "$RESEND_API_KEY" ]; then
-            echo 'Resend prototype configuration: ENABLED'
+            echo 'Resend transport key: PRESENT'
           else
-            echo 'Resend prototype configuration: INACTIVE — RESEND_API_KEY missing'
+            echo 'Resend transport key: ABSENT'
           fi
-          echo 'Prototype sender and app URL are governed by workers/broadcast/wrangler.jsonc'
+          echo 'Real-user delivery remains fail-closed unless a verified RESEND_FROM_EMAIL and APP_BASE_URL are available at Worker runtime.'
+          echo 'No production test-recipient override is supported.'
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Deploy broadcast worker with prototype Resend
+      - name: Deploy broadcast worker with Resend transport key
         if: env.RESEND_API_KEY != ''
         uses: cloudflare/wrangler-action@v4
         with:
