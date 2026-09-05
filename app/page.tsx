@@ -38,6 +38,7 @@ export default function HomePage() {
   const [sessions, setSessions] = useState<BookingSession[]>([])
   const [interests, setInterests] = useState<Interest[]>([])
   const [partySizes, setPartySizes] = useState<Record<string, number>>({})
+  const [isAdmin, setIsAdmin] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [isOnline, setIsOnline] = useState(true)
@@ -51,21 +52,28 @@ export default function HomePage() {
     if (!user) {
       setSessions([])
       setInterests([])
+      setIsAdmin(false)
       return
     }
 
-    const [{ data: sessionRows, error: sessionError }, { data: interestRows, error: interestError }] =
-      await Promise.all([
-        supabase
-          .from('booking_sessions')
-          .select('id,title,starts_at,interest_opens_at,interest_closes_at,draw_starts_at,min_party_size,max_party_size,status')
-          .eq('status', 'published')
-          .order('starts_at', { ascending: true }),
-        supabase
-          .from('interests')
-          .select('id,session_id,party_size,status')
-          .order('joined_at', { ascending: false })
-      ])
+    const [
+      { data: sessionRows, error: sessionError },
+      { data: interestRows, error: interestError },
+      { data: adminAllowed }
+    ] = await Promise.all([
+      supabase
+        .from('booking_sessions')
+        .select('id,title,starts_at,interest_opens_at,interest_closes_at,draw_starts_at,min_party_size,max_party_size,status')
+        .eq('status', 'published')
+        .order('starts_at', { ascending: true }),
+      supabase
+        .from('interests')
+        .select('id,session_id,party_size,status')
+        .order('joined_at', { ascending: false }),
+      supabase.rpc('is_platform_admin')
+    ])
+
+    setIsAdmin(adminAllowed === true)
 
     if (sessionError || interestError) {
       setMessage(sessionError?.message ?? interestError?.message ?? 'Tidak dapat memuatkan data.')
@@ -214,7 +222,14 @@ export default function HomePage() {
                 <strong>{user.email}</strong>
                 <div className="muted">Satu akaun untuk semua sesi Rembayung Access.</div>
               </div>
-              <button disabled={busy || !isOnline} className="secondary" onClick={signOut}>Log keluar</button>
+              <div className="row accountActions">
+                {isAdmin && (
+                  <a className="routeButton" href="/admin" aria-label="Buka operasi admin">
+                    Buka Admin
+                  </a>
+                )}
+                <button disabled={busy || !isOnline} className="secondary" onClick={signOut}>Log keluar</button>
+              </div>
             </div>
           </section>
 

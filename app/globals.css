@@ -96,7 +96,8 @@ select {
   background: white;
 }
 
-button {
+button,
+.routeButton {
   min-height: 48px;
   border: 0;
   border-radius: 999px;
@@ -107,6 +108,14 @@ button {
   touch-action: manipulation;
 }
 
+.routeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 600;
+}
+
 button.secondary {
   background: #ece7de;
   color: #171717;
@@ -115,6 +124,10 @@ button.secondary {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.accountActions {
+  justify-content: flex-end;
 }
 
 .muted {
@@ -238,8 +251,13 @@ button:disabled {
     border-radius: 16px;
   }
 
-  .row > button {
+  .row > button,
+  .row > .routeButton {
     flex: 1 1 150px;
+  }
+
+  .accountActions {
+    width: 100%;
   }
 
   .installPromptBackdrop {
