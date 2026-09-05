@@ -6,7 +6,7 @@ Last updated: 2026-09-05
 
 Rembayung Access is a production-connected MVP for fair access before UMAI.
 
-Slice A is implemented. Slice B scheduled random draw is COMPLETE — production runtime accepted. Slice C Resend invitation delivery is the active product slice.
+Slice A is implemented. Slice B scheduled random draw is COMPLETE — production runtime accepted. Slice C Resend invitation delivery is IMPLEMENTED / DEPLOYED, with production email acceptance waiting only on Resend configuration and a fresh acceptance invitation.
 
 ## Completed / operational
 
@@ -23,7 +23,9 @@ Slice A is implemented. Slice B scheduled random draw is COMPLETE — production
 - Supabase migration dry-run gate on PRs and governed migration apply on `main`.
 - Governed Cloudflare broadcast Worker deployment from `main` when worker/deployment files change.
 - Read-only Slice B production runtime checkpoint through GitHub Actions.
+- Read-only Slice C production delivery checkpoint through GitHub Actions.
 - Cloudflare Cron production diagnostic and Worker runtime tail diagnostic for focused operational debugging.
+- Slice C retryable invitation email outbox and Resend Worker transport deployed to production.
 
 ## Slice B — COMPLETE / production runtime accepted
 
@@ -49,17 +51,44 @@ During runtime acceptance, focused diagnostics identified two integration defect
 
 No manual draw RPC was used for final acceptance; the successful transitions were produced by the production Cloudflare Cron path.
 
-## Active product slice — Slice C Resend
+## Slice C — IMPLEMENTED / DEPLOYED / production acceptance pending configuration
 
-Target:
+Implemented authority and delivery behavior:
 
-- consume pending invitation delivery rows;
-- send transactional invitation email through Resend from server/Worker runtime only;
-- email returns the selected user to a Rembayung Access invitation URL, never directly to UMAI;
-- record delivery provider result, provider message ID, attempt count, sent timestamp and bounded failure state;
-- retry safely and idempotently;
-- preserve Supabase as transactional authority;
-- remain extensible for Supabase Realtime in-app updates and future Web Push notifications, with email as a reliable delivery channel.
+- migration `20260905000300_slice_c_resend_delivery_outbox.sql` adds retryable outbox state;
+- invitation plaintext token is retained only in the RLS-protected delivery row while delivery is pending/retryable and is cleared after successful send or expiry;
+- pre-Slice-C pending rows that cannot reconstruct plaintext token are retired explicitly rather than retried incorrectly;
+- `claim_pending_email_delivery()` claims one actionable delivery with row locking and stale-send reclaim;
+- `complete_email_delivery()` records provider result and clears the transient token;
+- `fail_email_delivery()` records bounded error state and schedules retry backoff;
+- `expire_email_deliveries()` retires expired unsent delivery payloads;
+- all delivery mutation RPCs are service-role-only;
+- Broadcast Worker drains up to a bounded number of deliveries per Cron tick;
+- Resend request uses a stable per-invitation idempotency key;
+- operational logs do not expose recipient emails or plaintext invitation tokens;
+- invitation email returns the user to a Rembayung Access invitation route, never directly to UMAI;
+- Worker remains healthy and leaves outbox state untouched when Resend production configuration is incomplete.
+
+Production deployment evidence:
+
+- Slice C Supabase migration dry-run PASS;
+- Slice C production migration apply PASS;
+- Broadcast Worker deployment PASS;
+- Slice C runtime checkpoint PASS;
+- current outbox has one legacy pre-Slice-C row, safely `failed` with `attempt_count = 0` and no retained plaintext token;
+- production Cron tail captured `outcome: ok` with no exception;
+- production Worker reported `Invitation email delivery inactive: Resend production configuration is incomplete`;
+- governed Worker deployment subsequently selected the safe `without Resend` path because the required production values were not complete.
+
+Active production acceptance boundary:
+
+1. configure all three values in the GitHub `production` environment: `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_BASE_URL`;
+2. governed Worker deploy must select the `with Resend` path;
+3. issue a fresh invitation through the existing draw authority so the outbox receives a valid transient token;
+4. verify `pending -> sending -> sent`, one provider message ID, bounded attempt count and token clearing;
+5. repeat the runtime checkpoint to prove no duplicate send or stuck claim.
+
+Do not reconstruct or reuse the pre-Slice-C invitation token; only a fresh invitation can prove Slice C correctly.
 
 ## Subsequent slices
 
