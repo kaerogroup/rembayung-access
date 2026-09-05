@@ -1,4 +1,7 @@
-begin;
+-- Slice D production acceptance harness.
+-- This migration creates a temporary fixture, executes the real invitation RPCs,
+-- asserts the security/state boundaries, then removes every fixture row before commit.
+-- Any failed assertion aborts and rolls back the migration.
 
 do $$
 declare
@@ -26,18 +29,8 @@ begin
   end if;
 
   insert into public.booking_sessions(
-    id,
-    title,
-    starts_at,
-    interest_opens_at,
-    interest_closes_at,
-    draw_starts_at,
-    wave_size,
-    wave_interval_minutes,
-    max_waves,
-    invitation_ttl_minutes,
-    umai_url,
-    status
+    id, title, starts_at, interest_opens_at, interest_closes_at, draw_starts_at,
+    wave_size, wave_interval_minutes, max_waves, invitation_ttl_minutes, umai_url, status
   ) values (
     v_session_id,
     '[TEST] Slice D — Transactional Invitation Gate',
@@ -45,60 +38,25 @@ begin
     now() - interval '2 hours',
     now() - interval '1 hour',
     now() - interval '30 minutes',
-    1,
-    5,
-    1,
-    30,
-    v_destination,
-    'published'
+    1, 5, 1, 30, v_destination, 'published'
   );
 
   insert into public.interests(
-    id,
-    user_id,
-    session_id,
-    party_size,
-    status,
-    joined_at,
-    selected_at
+    id, user_id, session_id, party_size, status, joined_at, selected_at
   ) values (
-    v_interest_id,
-    v_owner_id,
-    v_session_id,
-    2,
-    'selected',
-    now() - interval '90 minutes',
-    now() - interval '20 minutes'
+    v_interest_id, v_owner_id, v_session_id, 2, 'selected',
+    now() - interval '90 minutes', now() - interval '20 minutes'
   );
 
   insert into public.draw_waves(
-    id,
-    session_id,
-    wave_no,
-    scheduled_at,
-    processed_at,
-    status,
-    selected_count
+    id, session_id, wave_no, scheduled_at, processed_at, status, selected_count
   ) values (
-    v_wave_id,
-    v_session_id,
-    1,
-    now() - interval '30 minutes',
-    now() - interval '20 minutes',
-    'completed',
-    1
+    v_wave_id, v_session_id, 1, now() - interval '30 minutes',
+    now() - interval '20 minutes', 'completed', 1
   );
 
   insert into public.invitations(
-    id,
-    wave_id,
-    interest_id,
-    user_id,
-    session_id,
-    token_hash,
-    status,
-    issued_at,
-    expires_at
+    id, wave_id, interest_id, user_id, session_id, token_hash, status, issued_at, expires_at
   ) values (
     v_invitation_id,
     v_wave_id,
@@ -111,7 +69,7 @@ begin
     now() + interval '20 minutes'
   );
 
-  -- Valid owner opens the invitation. The DB must transition issued -> opened.
+  -- Valid owner: issued -> opened.
   perform set_config('request.jwt.claim.sub', v_owner_id::text, true);
   select * into v_open from public.open_invitation(v_token);
 
@@ -123,7 +81,7 @@ begin
     raise exception 'expected opened status, got %', v_open.invitation_status;
   end if;
 
-  -- A different identity must learn nothing about the same valid token.
+  -- Wrong owner: same token must resolve to nothing.
   perform set_config('request.jwt.claim.sub', v_wrong_owner_id::text, true);
   select count(*) into v_count from public.open_invitation(v_token);
 
@@ -131,13 +89,10 @@ begin
     raise exception 'wrong owner unexpectedly resolved invitation';
   end if;
 
-  -- The correct owner can redirect only after a fresh DB validation.
+  -- Valid redirect: canonical DB destination + audit.
   perform set_config('request.jwt.claim.sub', v_owner_id::text, true);
   select * into v_redirect
-  from public.redirect_invitation(
-    v_token,
-    repeat('a', 64)
-  );
+  from public.redirect_invitation(v_token, repeat('a', 64));
 
   if v_redirect.invitation_id is distinct from v_invitation_id
     or v_redirect.destination_url is distinct from v_destination then
@@ -152,12 +107,9 @@ begin
     raise exception 'expected one redirect audit after first redirect, got %', v_count;
   end if;
 
-  -- Repeated redirect remains safe: same destination, no new entitlement, auditable action.
+  -- Repeated redirect: no new entitlement; same destination; second action is auditable.
   select * into v_redirect
-  from public.redirect_invitation(
-    v_token,
-    repeat('b', 64)
-  );
+  from public.redirect_invitation(v_token, repeat('b', 64));
 
   if v_redirect.destination_url is distinct from v_destination then
     raise exception 'repeat redirect changed destination';
@@ -179,7 +131,7 @@ begin
     raise exception 'expected redirected invitation state, got %', v_status;
   end if;
 
-  -- Once expired, even the owner may no longer obtain a destination.
+  -- Expired owner token: visible as expired, never returns UMAI destination.
   update public.invitations
   set expires_at = now() - interval '1 minute'
   where id = v_invitation_id;
@@ -205,8 +157,15 @@ begin
     raise exception 'expired redirect attempt should not create audit; got %', v_count;
   end if;
 
+  -- Leave no runtime fixture behind.
+  delete from public.redirect_audits where invitation_id = v_invitation_id;
+  delete from public.invitations where id = v_invitation_id;
+  delete from public.draw_waves where id = v_wave_id;
+  delete from public.interests where id = v_interest_id;
+  delete from public.booking_sessions where id = v_session_id;
+
+  perform set_config('request.jwt.claim.sub', '', true);
+
   raise notice 'PASS: Slice D valid owner, wrong owner, repeated redirect and expiry boundaries verified';
 end;
 $$;
-
-rollback;
